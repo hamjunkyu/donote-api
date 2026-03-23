@@ -38,4 +38,4 @@
 | 김동준 | [dg-jun0918](https://github.com/dg-jun0918) |
 | 김민수 | [15proms1008](https://github.com/15proms1008) |
 | 함준규 | [hamjunkyu](https://github.com/hamjunkyu) |
-| Becky | [Rhebekah](https://github.com/Rhebekah) |
+| 베키 | [Rhebekah](https://github.com/Rhebekah) |
