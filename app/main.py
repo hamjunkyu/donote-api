@@ -1,3 +1,5 @@
+"""Donote API 애플리케이션 진입점."""
+
 from fastapi import FastAPI
 
 from app.auth.router import router as auth_router
@@ -25,4 +27,5 @@ app.include_router(csv_import_router)
 
 @app.get("/")
 def root():
+    """API 상태 확인 엔드포인트."""
     return {"message": "Donote API is running"}
