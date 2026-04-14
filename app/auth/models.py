@@ -1,3 +1,5 @@
+"""인증 관련 데이터베이스 모델."""
+
 import uuid
 from datetime import datetime
 
@@ -8,6 +10,8 @@ from app.database import Base
 
 
 class User(Base):
+    """사용자 계정 (인증 및 프로필)."""
+
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -18,6 +22,8 @@ class User(Base):
 
 
 class RefreshToken(Base):
+    """검증 및 폐기를 위해 DB에 저장되는 JWT 리프레시 토큰."""
+
     __tablename__ = "refresh_tokens"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
