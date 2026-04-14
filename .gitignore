@@ -35,3 +35,5 @@ alembic/versions/__pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+
+open_venv_source.txt
