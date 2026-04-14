@@ -18,3 +18,11 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, curr
     db.refresh(db_transaction)
 
     return db_transaction
+
+
+def get_transactions(db: Session, current_user):
+    return db.query(models.Transaction).filter(
+        models.Transaction.user_id == current_user.id
+    ).all()
+    
+        

@@ -17,3 +17,6 @@ class TransactionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class TransactionListResponse(BaseModel):
+    transactions: List[TransactionResponse]        

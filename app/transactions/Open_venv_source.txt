@@ -1,0 +1,26 @@
+GIT_BASH
+source venv/Scripts/activate
+
+TERMINAL
+venv\Scripts\activate
+
+
+git_bash without folder
+cd donote-api
+source venv/Scripts/activate
+
+
+
+TO run my code go to git_bash
+uvicorn app.main:app --reload --port 8001
+
+
+
+
+Router Info
+from fastapi import APIRouter
+router = APIRouter(prefix="/api/transactions", tags=["Transactions"])
+
+
+SWAGGER
+http://localhost:8001/docs
