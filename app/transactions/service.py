@@ -25,3 +25,12 @@ def get_transactions(db: Session, current_user):
         models.Transaction.user_id == current_user.id
     ).all()
         
+
+def get_transaction_by_id(db: Session, transaction_id, current_user):
+    return db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id,
+        models.Transaction.user_id == current_user.id
+    ).first()
+
+    
+            
