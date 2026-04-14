@@ -1,0 +1,20 @@
+from sqlalchemy.orm import Session
+from datetime import date
+from . import models, schemas
+
+
+def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user):
+    db_transaction = models.Transaction(
+        user_id=current_user.id,        # ✅ REAL USER
+        type="EXPENSE",                 # can change later
+        amount=transaction.amount,
+        category_id=transaction.category_id,  # MUST exist in DB
+        description=transaction.description,
+        transaction_date=date.today()
+    )
+
+    db.add(db_transaction)
+    db.commit()
+    db.refresh(db_transaction)
+
+    return db_transaction
