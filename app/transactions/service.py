@@ -5,8 +5,8 @@ from . import models, schemas
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user):
     db_transaction = models.Transaction(
-        user_id=current_user.id,        # ✅ REAL USER
-        type="EXPENSE",                 # can change later
+        user_id=current_user.id,        #
+        type="EXPENSE",                 
         amount=transaction.amount,
         category_id=transaction.category_id,  # MUST exist in DB
         description=transaction.description,

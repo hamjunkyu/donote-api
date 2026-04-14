@@ -5,7 +5,7 @@ import uuid
 
 class TransactionCreate(BaseModel):
     amount: float
-    category_id: uuid.UUID   # REQUIRED (matches your model)
+    category_id: uuid.UUID   
     description: str
 
 
