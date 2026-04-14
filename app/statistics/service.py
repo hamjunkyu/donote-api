@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, case
 from app.transactions.models import Transaction
 from app.settlements.models import Settlement, SettlementParticipant
 from app.categories.models import Category
@@ -33,8 +33,6 @@ def get_period_summary(db: Session, user_id: str, period: str, date_from: date, 
         group_expr = func.to_char(Transaction.transaction_date, 'YYYY-MM-DD')
         
     actual_amount_expr = _actual_amount_subquery()
-    
-    from sqlalchemy import case
     
     income_expr = func.sum(
         case(
@@ -125,8 +123,6 @@ def get_monthly_report(db: Session, user_id: str, month: str):
     date_to = date(year, mon, last_day)
     
     actual_amount_expr = _actual_amount_subquery()
-    
-    from sqlalchemy import case
     
     income_expr = func.sum(case((Transaction.type == 'INCOME', actual_amount_expr), else_=0))
     expense_expr = func.sum(case((Transaction.type == 'EXPENSE', actual_amount_expr), else_=0))
