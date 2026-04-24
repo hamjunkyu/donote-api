@@ -32,5 +32,27 @@ def get_transaction_by_id(db: Session, transaction_id, current_user):
         models.Transaction.user_id == current_user.id
     ).first()
 
-    
-            
+
+def update_transaction(db: Session, transaction_id, transaction_update: schemas.TransactionUpdate, current_user):
+    transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id,
+        models.Transaction.user_id == current_user.id
+    ).first()
+
+    if not transaction:
+        return None
+
+    if transaction_update.amount is not None:
+        transaction.amount = transaction_update.amount
+
+    if transaction_update.category_id is not None:
+        transaction.category_id = transaction_update.category_id
+
+    if transaction_update.description is not None:
+        transaction.description = transaction_update.description
+
+    db.commit()
+    db.refresh(transaction)
+
+    return transaction
+

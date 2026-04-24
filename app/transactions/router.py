@@ -44,4 +44,16 @@ def get_transaction(
     return transaction
 
 
-    
+@router.patch("/{transaction_id}", response_model=schemas.TransactionResponse)
+def update_transaction(
+    transaction_id: uuid.UUID,
+    transaction_update: schemas.TransactionUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    transaction = service.update_transaction(db, transaction_id, transaction_update, current_user)
+
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    return transaction

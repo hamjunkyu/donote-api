@@ -18,4 +18,11 @@ class TransactionResponse(BaseModel):
     class Config:
         from_attributes = True
 
-        
+
+class TransactionUpdate(BaseModel):
+    amount: float | None = None
+    category_id: uuid.UUID | None = None
+    description: str | None = None  
+
+
+    
