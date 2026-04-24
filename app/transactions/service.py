@@ -56,3 +56,18 @@ def update_transaction(db: Session, transaction_id, transaction_update: schemas.
 
     return transaction
 
+
+def delete_transaction(db: Session, transaction_id, current_user):
+    transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id,
+        models.Transaction.user_id == current_user.id
+    ).first()
+
+    if not transaction:
+        return None
+
+    db.delete(transaction)
+    db.commit()
+
+    return transaction
+

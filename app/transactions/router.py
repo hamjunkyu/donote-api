@@ -57,3 +57,18 @@ def update_transaction(
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     return transaction
+
+
+@router.delete("/{transaction_id}")
+def delete_transaction(
+    transaction_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    transaction = service.delete_transaction(db, transaction_id, current_user)
+
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    return {"message": "Transaction deleted successfully"}
+
