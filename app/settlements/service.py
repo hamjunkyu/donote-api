@@ -4,7 +4,7 @@ from . import models, schemas
 
 
 def create_settlement(db: Session, settlement: schemas.SettlementCreate, current_user):
-    # 1. Get transaction
+    #Get transaction and verify ownership
     transaction = db.query(transaction_models.Transaction).filter(
         transaction_models.Transaction.id == settlement.transaction_id,
         transaction_models.Transaction.user_id == current_user.id
@@ -13,7 +13,8 @@ def create_settlement(db: Session, settlement: schemas.SettlementCreate, current
     if not transaction:
         return None
 
-    # 2. Create settlement
+
+      # create settlement record
     db_settlement = models.Settlement(
         transaction_id=transaction.id,
         creator_id=current_user.id,
@@ -61,8 +62,65 @@ def split_equal(db: Session, settlement_id):
     split_amount = settlement.total_amount / len(participants)
 
     for p in participants:
-        p.amount = split_amount
+        if p.user_id == settlement.creator_id:
+            # creator gets money back (negative)
+            p.amount = split_amount - float(settlement.total_amount)
+        else:
+            # others owe money (positive)
+            p.amount = split_amount
 
     db.commit()
 
     return participants
+
+
+def calculate_debts(db: Session, settlement_id):
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    if not participants:
+        return None
+
+    creditors = []
+    debtors = []
+
+  
+    for p in participants:
+        amount = float(p.amount)
+
+        if amount < 0:
+            creditors.append({
+                "name": p.display_name,
+                "amount": abs(amount)
+            })
+        else:
+            debtors.append({
+                "name": p.display_name,
+                "amount": amount
+            })
+
+    transactions = []
+
+    # match debtors to creditors
+    for debtor in debtors:
+        for creditor in creditors:
+            if debtor["amount"] == 0:
+                break
+            if creditor["amount"] == 0:
+                continue
+
+            pay_amount = min(debtor["amount"], creditor["amount"])
+
+            transactions.append({
+                "from": debtor["name"],
+                "to": creditor["name"],
+                "amount": pay_amount
+            })
+
+            debtor["amount"] -= pay_amount
+            creditor["amount"] -= pay_amount
+
+    return transactions
+
+

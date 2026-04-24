@@ -45,3 +45,30 @@ def equal_split(
         raise HTTPException(status_code=404, detail="Settlement or participants not found")
 
     return result
+
+
+@router.get("/{settlement_id}/balance")
+def view_balance(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.get_balance(db, settlement_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+
+    return result
+
+@router.get("/{settlement_id}/debts")
+def get_debts(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.calculate_debts(db, settlement_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+
+    return result
