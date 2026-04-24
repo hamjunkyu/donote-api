@@ -41,3 +41,28 @@ def add_participant(db: Session, settlement_id, participant: schemas.Participant
     db.refresh(new_participant)
 
     return new_participant
+
+
+def split_equal(db: Session, settlement_id):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id
+    ).first()
+
+    if not settlement:
+        return None
+
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    if not participants:
+        return None
+
+    split_amount = settlement.total_amount / len(participants)
+
+    for p in participants:
+        p.amount = split_amount
+
+    db.commit()
+
+    return participants

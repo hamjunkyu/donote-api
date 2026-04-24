@@ -31,3 +31,17 @@ def add_participant(
     current_user = Depends(get_current_user)
 ):
     return service.add_participant(db, settlement_id, participant)
+
+
+@router.post("/{settlement_id}/split/equal")
+def equal_split(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.split_equal(db, settlement_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement or participants not found")
+
+    return result
