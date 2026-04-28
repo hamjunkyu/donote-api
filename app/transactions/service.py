@@ -1,16 +1,18 @@
 from sqlalchemy.orm import Session
-from datetime import date
+from fastapi import HTTPException
 from . import models, schemas
+from app.settlements import models as settlement_models
 
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user):
     db_transaction = models.Transaction(
-        user_id=current_user.id,        #
-        type="EXPENSE",                 
+        user_id=current_user.id,
+        type=transaction.type,  
         amount=transaction.amount,
-        category_id=transaction.category_id,  # MUST exist in DB
+        category_id=transaction.category_id,
         description=transaction.description,
-        transaction_date=date.today()
+        transaction_date=transaction.transaction_date,  
+        transaction_time=transaction.transaction_time   
     )
 
     db.add(db_transaction)
@@ -24,7 +26,7 @@ def get_transactions(db: Session, current_user):
     return db.query(models.Transaction).filter(
         models.Transaction.user_id == current_user.id
     ).order_by(models.Transaction.created_at.desc()).all()
-        
+
 
 def get_transaction_by_id(db: Session, transaction_id, current_user):
     return db.query(models.Transaction).filter(
@@ -42,6 +44,9 @@ def update_transaction(db: Session, transaction_id, transaction_update: schemas.
     if not transaction:
         return None
 
+    if transaction_update.type is not None:  
+        transaction.type = transaction_update.type
+
     if transaction_update.amount is not None:
         transaction.amount = transaction_update.amount
 
@@ -50,6 +55,12 @@ def update_transaction(db: Session, transaction_id, transaction_update: schemas.
 
     if transaction_update.description is not None:
         transaction.description = transaction_update.description
+
+    if transaction_update.transaction_date is not None:  
+        transaction.transaction_date = transaction_update.transaction_date
+
+    if transaction_update.transaction_time is not None:  
+        transaction.transaction_time = transaction_update.transaction_time
 
     db.commit()
     db.refresh(transaction)
@@ -66,8 +77,18 @@ def delete_transaction(db: Session, transaction_id, current_user):
     if not transaction:
         return None
 
+   
+    settlement = db.query(settlement_models.Settlement).filter(
+        settlement_models.Settlement.transaction_id == transaction_id
+    ).first()
+
+    if settlement:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete transaction linked to settlement"
+        )
+
     db.delete(transaction)
     db.commit()
 
     return transaction
-
