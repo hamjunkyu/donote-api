@@ -143,3 +143,32 @@ def view_settlement(
         raise HTTPException(status_code=404, detail="Settlement not found")
 
     return result
+
+
+@router.patch("/{settlement_id}")
+def edit_settlement(
+    settlement_id: uuid.UUID,
+    update_data: schemas.SettlementUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.update_settlement(db, settlement_id, update_data, current_user)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found or not authorized")
+
+    return result
+
+
+@router.delete("/{settlement_id}")
+def delete_settlement(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.delete_settlement(db, settlement_id, current_user)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found or not authorized")
+
+    return {"message": "Settlement deleted successfully"}

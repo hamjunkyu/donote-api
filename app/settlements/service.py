@@ -239,3 +239,35 @@ def get_settlement(db: Session, settlement_id):
             for p in participants
         ]
     }
+
+def update_settlement(db: Session, settlement_id, update_data: schemas.SettlementUpdate, current_user):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id,
+        models.Settlement.creator_id == current_user.id
+    ).first()
+
+    if not settlement:
+        return None
+
+    if update_data.split_type is not None:
+        settlement.split_type = update_data.split_type
+
+    db.commit()
+    db.refresh(settlement)
+
+    return settlement
+
+
+def delete_settlement(db: Session, settlement_id, current_user):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id,
+        models.Settlement.creator_id == current_user.id
+    ).first()
+
+    if not settlement:
+        return None
+
+    db.delete(settlement)
+    db.commit()
+
+    return settlement

@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 import uuid
 from typing import List, Literal
+from typing import Optional, Literal
 
 
 class SettlementCreate(BaseModel):
@@ -21,3 +22,6 @@ class CustomSplitItem(BaseModel):
 
 class CustomSplitRequest(BaseModel):
     splits: List[CustomSplitItem]
+
+class SettlementUpdate(BaseModel):
+    split_type: Optional[Literal["EQUAL", "CUSTOM"]] = None
