@@ -72,3 +72,17 @@ def get_debts(
         raise HTTPException(status_code=404, detail="Settlement not found")
 
     return result
+
+
+@router.patch("/{settlement_id}/complete")
+def mark_complete(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.mark_settlement_complete(db, settlement_id, current_user)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found or not authorized")
+
+    return result

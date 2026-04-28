@@ -99,3 +99,19 @@ def calculate_debts(db: Session, settlement_id):
         })
 
     return transactions
+
+def mark_settlement_complete(db: Session, settlement_id, current_user):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id,
+        models.Settlement.creator_id == current_user.id
+    ).first()
+
+    if not settlement:
+        return None
+
+    settlement.status = "COMPLETED"
+
+    db.commit()
+    db.refresh(settlement)
+
+    return settlement
