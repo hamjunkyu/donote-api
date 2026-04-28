@@ -169,3 +169,42 @@ def get_balance(db: Session, settlement_id):
         }
         for p in participants
     ]
+
+
+def split_custom(db: Session, settlement_id, split_data: schemas.CustomSplitRequest):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id
+    ).first()
+
+    if not settlement:
+        return None
+
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    if not participants:
+        return None
+
+    # Map participants for quick access
+    participant_map = {p.id: p for p in participants}
+
+    total = 0
+
+    # Apply custom amounts
+    for item in split_data.splits:
+        if item.participant_id not in participant_map:
+            return None  # invalid participant
+
+        participant_map[item.participant_id].amount = item.amount
+        total += item.amount
+
+    # Validate total matches settlement amount
+    if round(total, 2) != round(float(settlement.total_amount), 2):
+        return None
+
+    settlement.split_type = "CUSTOM"
+
+    db.commit()
+
+    return participants

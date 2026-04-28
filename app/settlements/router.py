@@ -114,3 +114,18 @@ def get_participants(
         raise HTTPException(status_code=404, detail="Participant not found")
 
     return result
+
+
+@router.post("/{settlement_id}/split/custom")
+def custom_split(
+    settlement_id: uuid.UUID,
+    split_data: schemas.CustomSplitRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.split_custom(db, settlement_id, split_data)
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Invalid split data or mismatch in total amount")
+
+    return result
