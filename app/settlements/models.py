@@ -26,17 +26,17 @@ class Settlement(Base):
         ForeignKey("users.id"), nullable=False
     )
     total_amount: Mapped[float] = mapped_column(
-        Numeric(12, 0), nullable=False
+        Numeric(12, 2), nullable=False
     )
     split_type: Mapped[str] = mapped_column(
         SAEnum("EQUAL", "CUSTOM", name="split_type"), nullable=False
     )
     status: Mapped[str] = mapped_column(
         SAEnum(
-            "IN_PROGRESS", "COMPLETED", "CANCELLED",
+            "PENDING", "COMPLETED", "CANCELLED",
             name="settlement_status",
         ),
-        default="IN_PROGRESS",
+        default="PENDING",
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -61,7 +61,7 @@ class SettlementParticipant(Base):
         ForeignKey("users.id")
     )
     display_name: Mapped[str] = mapped_column(String(20), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(12, 0), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     status: Mapped[str] = mapped_column(
         SAEnum("PENDING", "SETTLED", name="participant_status"),
         default="PENDING",

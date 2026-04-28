@@ -4,7 +4,6 @@ from . import models, schemas
 
 
 def create_settlement(db: Session, settlement: schemas.SettlementCreate, current_user):
-    #Get transaction and verify ownership
     transaction = db.query(transaction_models.Transaction).filter(
         transaction_models.Transaction.id == settlement.transaction_id,
         transaction_models.Transaction.user_id == current_user.id
@@ -13,8 +12,6 @@ def create_settlement(db: Session, settlement: schemas.SettlementCreate, current
     if not transaction:
         return None
 
-
-      # create settlement record
     db_settlement = models.Settlement(
         transaction_id=transaction.id,
         creator_id=current_user.id,
@@ -59,15 +56,10 @@ def split_equal(db: Session, settlement_id):
     if not participants:
         return None
 
-    split_amount = settlement.total_amount / len(participants)
+    split_amount = round(float(settlement.total_amount) / len(participants), 2)
 
     for p in participants:
-        if p.user_id == settlement.creator_id:
-            # creator gets money back (negative)
-            p.amount = split_amount - float(settlement.total_amount)
-        else:
-            # others owe money (positive)
-            p.amount = split_amount
+        p.amount = split_amount  # all positive (correct per feedback)
 
     db.commit()
 
@@ -75,6 +67,13 @@ def split_equal(db: Session, settlement_id):
 
 
 def calculate_debts(db: Session, settlement_id):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id
+    ).first()
+
+    if not settlement:
+        return None
+
     participants = db.query(models.SettlementParticipant).filter(
         models.SettlementParticipant.settlement_id == settlement_id
     ).all()
@@ -82,45 +81,21 @@ def calculate_debts(db: Session, settlement_id):
     if not participants:
         return None
 
-    creditors = []
-    debtors = []
-
-  
-    for p in participants:
-        amount = float(p.amount)
-
-        if amount < 0:
-            creditors.append({
-                "name": p.display_name,
-                "amount": abs(amount)
-            })
-        else:
-            debtors.append({
-                "name": p.display_name,
-                "amount": amount
-            })
+    creator = next(
+        (p for p in participants if p.user_id == settlement.creator_id),
+        None
+    )
 
     transactions = []
 
-    # match debtors to creditors
-    for debtor in debtors:
-        for creditor in creditors:
-            if debtor["amount"] == 0:
-                break
-            if creditor["amount"] == 0:
-                continue
+    for p in participants:
+        if p.user_id == settlement.creator_id:
+            continue
 
-            pay_amount = min(debtor["amount"], creditor["amount"])
-
-            transactions.append({
-                "from": debtor["name"],
-                "to": creditor["name"],
-                "amount": pay_amount
-            })
-
-            debtor["amount"] -= pay_amount
-            creditor["amount"] -= pay_amount
+        transactions.append({
+            "from": p.display_name,
+            "to": creator.display_name if creator else "creator",
+            "amount": float(p.amount)
+        })
 
     return transactions
-
-
