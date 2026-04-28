@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.transactions import models as transaction_models
 from . import models, schemas
+from datetime import datetime
 
 
 def create_settlement(db: Session, settlement: schemas.SettlementCreate, current_user):
@@ -115,3 +116,56 @@ def mark_settlement_complete(db: Session, settlement_id, current_user):
     db.refresh(settlement)
 
     return settlement
+
+
+def mark_participant_settled(db: Session, participant_id, current_user):
+    participant = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.id == participant_id
+    ).first()
+
+    if not participant:
+        return None
+
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == participant.settlement_id
+    ).first()
+
+    if not settlement or settlement.creator_id != current_user.id:
+        return None
+
+    participant.status = "SETTLED"
+    participant.settled_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(participant)
+
+    return participant
+
+
+def get_participants_status(db: Session, settlement_id):
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    if not participants:
+        return None
+
+    return participants
+
+
+def get_balance(db: Session, settlement_id):
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    if not participants:
+        return None
+
+    return [
+        {
+            "name": p.display_name,
+            "amount": float(p.amount),
+            "status": p.status
+        }
+        for p in participants
+    ]

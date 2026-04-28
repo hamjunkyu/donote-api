@@ -55,8 +55,8 @@ def view_balance(
 ):
     result = service.get_balance(db, settlement_id)
 
-    if not result:
-        raise HTTPException(status_code=404, detail="Settlement not found")
+    if result is None:
+     raise HTTPException(status_code=404, detail="Settlement not found")
 
     return result
 
@@ -69,7 +69,7 @@ def get_debts(
     result = service.calculate_debts(db, settlement_id)
 
     if not result:
-        raise HTTPException(status_code=404, detail="Settlement not found")
+        raise HTTPException(status_code=404, detail="Settlement not found ")
 
     return result
 
@@ -84,5 +84,33 @@ def mark_complete(
 
     if not result:
         raise HTTPException(status_code=404, detail="Settlement not found or not authorized")
+
+    return result
+
+
+@router.patch("/participants/{participant_id}/settle")
+def mark_participant_paid(
+    participant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.mark_participant_settled(db, participant_id, current_user)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="No participants found")
+
+    return result
+
+
+@router.get("/{settlement_id}/participants")
+def get_participants(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.get_participants_status(db, settlement_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Participant not found")
 
     return result
