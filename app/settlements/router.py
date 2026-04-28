@@ -129,3 +129,17 @@ def custom_split(
         raise HTTPException(status_code=400, detail="Invalid split data or mismatch in total amount")
 
     return result
+
+
+@router.get("/{settlement_id}")
+def view_settlement(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.get_settlement(db, settlement_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+
+    return result

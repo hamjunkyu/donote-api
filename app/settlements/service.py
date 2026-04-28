@@ -208,3 +208,34 @@ def split_custom(db: Session, settlement_id, split_data: schemas.CustomSplitRequ
     db.commit()
 
     return participants
+
+
+def get_settlement(db: Session, settlement_id):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id
+    ).first()
+
+    if not settlement:
+        return None
+
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    return {
+        "id": settlement.id,
+        "transaction_id": settlement.transaction_id,
+        "creator_id": settlement.creator_id,
+        "total_amount": float(settlement.total_amount),
+        "split_type": settlement.split_type,
+        "status": settlement.status,
+        "participants": [
+            {
+                "id": p.id,
+                "name": p.display_name,
+                "amount": float(p.amount),
+                "status": p.status
+            }
+            for p in participants
+        ]
+    }
