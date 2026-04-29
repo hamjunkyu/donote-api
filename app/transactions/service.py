@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from . import models, schemas
 from app.settlements import models as settlement_models
+from app.budgets.service import check_and_notify_budget_threshold
 
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user):
@@ -18,6 +19,9 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, curr
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
+
+    if db_transaction.type == "EXPENSE":
+        check_and_notify_budget_threshold(db, current_user.id, db_transaction.transaction_date)
 
     return db_transaction
 
@@ -64,6 +68,9 @@ def update_transaction(db: Session, transaction_id, transaction_update: schemas.
 
     db.commit()
     db.refresh(transaction)
+
+    if transaction.type == "EXPENSE":
+        check_and_notify_budget_threshold(db, current_user.id, transaction.transaction_date)
 
     return transaction
 
