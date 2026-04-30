@@ -9,6 +9,7 @@ from app.statistics.router import router as statistics_router
 from app.budgets.router import router as budgets_router
 from app.settlements.router import router as settlements_router
 from app.csv_import.router import router as csv_import_router
+from app.notifications.router import router as notifications_router
 
 app = FastAPI(
     title="Donote API",
@@ -23,6 +24,7 @@ app.include_router(statistics_router)
 app.include_router(budgets_router)
 app.include_router(settlements_router)
 app.include_router(csv_import_router)
+app.include_router(notifications_router)
 
 
 @app.get("/")
