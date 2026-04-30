@@ -30,7 +30,12 @@ def add_participant(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    return service.add_participant(db, settlement_id, participant)
+    result = service.add_participant(db, settlement_id, participant, current_user)
+
+    if not result:
+        raise HTTPException(status_code=403, detail="Not authorized to add participants")
+
+    return result
 
 
 @router.post("/{settlement_id}/split/equal")
@@ -47,6 +52,37 @@ def equal_split(
     return result
 
 
+@router.post("/{settlement_id}/split/custom")
+def custom_split(
+    settlement_id: uuid.UUID,
+    split_data: schemas.CustomSplitRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.split_custom(db, settlement_id, split_data)
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Invalid split data or mismatch in total amount")
+
+    return result
+
+
+# ✅ NEW: edit split
+@router.patch("/{settlement_id}/split/edit")
+def edit_split(
+    settlement_id: uuid.UUID,
+    split_data: schemas.CustomSplitRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.edit_split(db, settlement_id, split_data, current_user)
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Invalid split update")
+
+    return result
+
+
 @router.get("/{settlement_id}/balance")
 def view_balance(
     settlement_id: uuid.UUID,
@@ -56,9 +92,10 @@ def view_balance(
     result = service.get_balance(db, settlement_id)
 
     if result is None:
-     raise HTTPException(status_code=404, detail="Settlement not found")
+        raise HTTPException(status_code=404, detail="Settlement not found")
 
     return result
+
 
 @router.get("/{settlement_id}/debts")
 def get_debts(
@@ -68,8 +105,8 @@ def get_debts(
 ):
     result = service.calculate_debts(db, settlement_id)
 
-    if not result:
-        raise HTTPException(status_code=404, detail="Settlement not found ")
+    if result is None:
+        raise HTTPException(status_code=404, detail="Settlement not found")
 
     return result
 
@@ -81,6 +118,27 @@ def mark_complete(
     current_user = Depends(get_current_user)
 ):
     result = service.mark_settlement_complete(db, settlement_id, current_user)
+
+    if result == "NOT_ALL_SETTLED":
+        raise HTTPException(status_code=400, detail="All participants must be settled")
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Settlement not found or not authorized")
+
+    return result
+
+
+# ✅ NEW: revert completion
+@router.patch("/{settlement_id}/revert")
+def revert_settlement(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    result = service.revert_completion(db, settlement_id, current_user)
+
+    if result == "NOT_COMPLETED":
+        raise HTTPException(status_code=400, detail="Settlement is not completed")
 
     if not result:
         raise HTTPException(status_code=404, detail="Settlement not found or not authorized")
@@ -97,7 +155,7 @@ def mark_participant_paid(
     result = service.mark_participant_settled(db, participant_id, current_user)
 
     if not result:
-        raise HTTPException(status_code=404, detail="No participants found")
+        raise HTTPException(status_code=404, detail="Participant not found or not authorized")
 
     return result
 
@@ -112,21 +170,6 @@ def get_participants(
 
     if not result:
         raise HTTPException(status_code=404, detail="Participant not found")
-
-    return result
-
-
-@router.post("/{settlement_id}/split/custom")
-def custom_split(
-    settlement_id: uuid.UUID,
-    split_data: schemas.CustomSplitRequest,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    result = service.split_custom(db, settlement_id, split_data)
-
-    if not result:
-        raise HTTPException(status_code=400, detail="Invalid split data or mismatch in total amount")
 
     return result
 

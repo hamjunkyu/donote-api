@@ -27,7 +27,15 @@ def create_settlement(db: Session, settlement: schemas.SettlementCreate, current
     return db_settlement
 
 
-def add_participant(db: Session, settlement_id, participant: schemas.ParticipantCreate):
+def add_participant(db: Session, settlement_id, participant: schemas.ParticipantCreate, current_user):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id,
+        models.Settlement.creator_id == current_user.id
+    ).first()
+
+    if not settlement:
+        return None
+
     new_participant = models.SettlementParticipant(
         settlement_id=settlement_id,
         user_id=participant.user_id,
@@ -60,10 +68,9 @@ def split_equal(db: Session, settlement_id):
     split_amount = round(float(settlement.total_amount) / len(participants), 2)
 
     for p in participants:
-        p.amount = split_amount  # all positive (correct per feedback)
+        p.amount = split_amount
 
     db.commit()
-
     return participants
 
 
@@ -101,6 +108,7 @@ def calculate_debts(db: Session, settlement_id):
 
     return transactions
 
+
 def mark_settlement_complete(db: Session, settlement_id, current_user):
     settlement = db.query(models.Settlement).filter(
         models.Settlement.id == settlement_id,
@@ -110,7 +118,34 @@ def mark_settlement_complete(db: Session, settlement_id, current_user):
     if not settlement:
         return None
 
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+
+    if any(p.status != "SETTLED" for p in participants):
+        return "NOT_ALL_SETTLED"
+
     settlement.status = "COMPLETED"
+
+    db.commit()
+    db.refresh(settlement)
+
+    return settlement
+
+
+def revert_completion(db: Session, settlement_id, current_user):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id,
+        models.Settlement.creator_id == current_user.id
+    ).first()
+
+    if not settlement:
+        return None
+
+    if settlement.status != "COMPLETED":
+        return "NOT_COMPLETED"
+
+    settlement.status = "PENDING"
 
     db.commit()
     db.refresh(settlement)
@@ -186,28 +221,37 @@ def split_custom(db: Session, settlement_id, split_data: schemas.CustomSplitRequ
     if not participants:
         return None
 
-    # Map participants for quick access
     participant_map = {p.id: p for p in participants}
 
     total = 0
 
-    # Apply custom amounts
     for item in split_data.splits:
         if item.participant_id not in participant_map:
-            return None  # invalid participant
+            return None
 
         participant_map[item.participant_id].amount = item.amount
         total += item.amount
 
-    # Validate total matches settlement amount
     if round(total, 2) != round(float(settlement.total_amount), 2):
         return None
 
     settlement.split_type = "CUSTOM"
 
     db.commit()
-
     return participants
+
+
+
+def edit_split(db: Session, settlement_id, split_data: schemas.CustomSplitRequest, current_user):
+    settlement = db.query(models.Settlement).filter(
+        models.Settlement.id == settlement_id,
+        models.Settlement.creator_id == current_user.id
+    ).first()
+
+    if not settlement:
+        return None
+
+    return split_custom(db, settlement_id, split_data)
 
 
 def get_settlement(db: Session, settlement_id):
@@ -239,6 +283,7 @@ def get_settlement(db: Session, settlement_id):
             for p in participants
         ]
     }
+
 
 def update_settlement(db: Session, settlement_id, update_data: schemas.SettlementUpdate, current_user):
     settlement = db.query(models.Settlement).filter(
