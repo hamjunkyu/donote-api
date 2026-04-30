@@ -128,7 +128,7 @@ def mark_complete(
     return result
 
 
-# ✅ NEW: revert completion
+
 @router.patch("/{settlement_id}/revert")
 def revert_settlement(
     settlement_id: uuid.UUID,
