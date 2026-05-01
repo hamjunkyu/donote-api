@@ -1,0 +1,47 @@
+"""저축 목표 데이터베이스 모델."""
+
+import uuid
+from datetime import datetime, date
+
+from sqlalchemy import String, Numeric, ForeignKey, Date, DateTime, Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.database import Base
+
+
+class Goal(Base):
+    """사용자의 저축 목표.
+
+    연결된 카테고리의 EXPENSE 거래 합계를 진행률로 계산한다.
+    상태 ENUM:
+      - IN_PROGRESS: 진행 중
+      - ACHIEVED: 목표 금액 달성
+      - EXPIRED: 달성일 경과 + 미달성
+      - CANCELLED: 사용자가 취소
+    """
+
+    __tablename__ = "goals"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_amount: Mapped[float] = mapped_column(Numeric(12, 0), nullable=False)
+    target_date: Mapped[date | None] = mapped_column(Date)
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("categories.id"), nullable=False
+    )
+    description: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(
+        SAEnum(
+            "IN_PROGRESS", "ACHIEVED", "EXPIRED", "CANCELLED",
+            name="goal_status",
+        ),
+        default="IN_PROGRESS",
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    achieved_at: Mapped[datetime | None] = mapped_column(DateTime)
