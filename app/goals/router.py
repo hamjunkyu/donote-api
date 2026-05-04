@@ -39,7 +39,12 @@ def get_goal(
     current_user=Depends(get_current_user),
 ):
     """특정 저축 목표 상세 조회."""
-    return service.get_goal_by_id(db, goal_id, current_user.id)
+    goal = service.get_goal_by_id(db, goal_id, current_user.id)
+
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    return goal
 
 
 @router.patch("/{goal_id}", response_model=schemas.GoalResponse)
