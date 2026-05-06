@@ -11,6 +11,7 @@ from app.settlements.router import router as settlements_router
 from app.csv_import.router import router as csv_import_router
 from app.notifications.router import router as notifications_router
 
+
 app = FastAPI(
     title="Donote API",
     description="개인 재무 관리 + 더치페이 정산 API",
