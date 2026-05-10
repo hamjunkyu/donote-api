@@ -14,8 +14,11 @@ class CategoryBase(BaseModel):
 class CategoryCreate(CategoryBase):
     pass
 
+class CategoryUpdate(BaseModel):
+    name: str = Field(..., max_length=50, description="수정할 카테고리 이름")
+
 class CategoryResponse(CategoryBase):
-    model_config = ConfigDict(from_attributes=True) # SQLAlchemy 객체 -> Pydantic 변환 허용
+    model_config = ConfigDict(from_attributes=True)
     
     id: UUID
     user_id: Optional[UUID] = None
