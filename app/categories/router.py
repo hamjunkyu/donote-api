@@ -4,35 +4,62 @@ from typing import List
 from uuid import UUID
 
 from app.database import get_db
-from .schemas import CategoryResponse, CategoryCreate
-from .service import CategoryService
+# 프로젝트 환경에 맞게 인증 의존성 경로 수정 필요
+from app.dependencies import get_current_user
+from app.models import User 
 
-router = APIRouter(prefix="/categories", tags=["Categories"])
+from .schemas import CategoryResponse, CategoryCreate, CategoryUpdate
+from . import service
+
+router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
 @router.get("/", response_model=List[CategoryResponse])
 def list_categories(
-    user_id: UUID, 
-    db: Session = Depends(get_db) # 동기 세션 주입
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    return CategoryService.get_categories(db, user_id) # await 제거됨
+    return service.get_categories(db, current_user.id)
 
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 def create_category(
-    user_id: UUID,
     data: CategoryCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    return CategoryService.create_category(db, user_id, data) # await 제거됨
+    return service.create_category(db, current_user.id, data)
+
+@router.patch("/{category_id}", response_model=CategoryResponse)
+def update_category(
+    category_id: UUID,
+    data: CategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    category = service.update_category(db, current_user.id, category_id, data)
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="수정 권한이 없거나 존재하지 않는 카테고리입니다."
+        )
+    return category
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_category(
     category_id: UUID,
-    user_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    success = CategoryService.delete_category(db, user_id, category_id) # await 제거됨
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="삭제 권한이 없거나 존재하지 않는 카테고리입니다."
-        )
+    try:
+        success = service.delete_category(db, current_user.id, category_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="삭제 권한이 없거나 존재하지 않는 카테고리입니다."
+            )
+    except ValueError as e:
+        if str(e) == "CATEGORY_IN_USE":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="해당 카테고리와 연결된 데이터가 있어 삭제할 수 없습니다."
+            )
+        raise e
