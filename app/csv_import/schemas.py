@@ -1,14 +1,14 @@
 from datetime import date
 from pydantic import BaseModel, Field
 
-
 class CSVRowData(BaseModel):
     """CSV 파일의 단일 행 데이터를 검증하는 스키마입니다."""
     row_number: int = Field(..., description="CSV 파일 내의 행 번호")
     transaction_date: date = Field(..., description="거래 일자 (YYYY-MM-DD 형식)")
+    type: str = Field(..., description="거래 유형 (INCOME/EXPENSE)")
+    category: str = Field(default="", description="카테고리명")
     amount: float = Field(..., description="거래 금액")
     memo: str = Field(default="", description="거래 메모")
-
 
 class ImportResult(BaseModel):
     """CSV 가져오기 작업의 최종 결과를 반환하는 스키마입니다."""
