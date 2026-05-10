@@ -14,6 +14,7 @@ from app.budgets.models import Budget
 from app.settlements.models import Settlement, SettlementParticipant
 from app.csv_import.models import ImportHash
 from app.notifications.models import Notification
+from app.goals.models import Goal
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
