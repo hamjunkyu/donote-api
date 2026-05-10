@@ -20,7 +20,15 @@ def create_goal(
     current_user=Depends(get_current_user),
 ):
     """새로운 저축 목표 생성."""
-    return service.create_goal(db, current_user.id, goal)
+    new_goal = service.create_goal(db, current_user.id, goal)
+
+    if not new_goal:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or unauthorized category",
+        )
+
+    return new_goal
 
 
 @router.get("/", response_model=list[schemas.GoalResponse])

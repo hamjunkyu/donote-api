@@ -7,11 +7,14 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.categories.models import Category
 from app.goals.models import Goal
 from app.goals.schemas import GoalCreate, GoalUpdate
 
 
-def create_goal(db: Session, user_id: uuid.UUID, goal_data: GoalCreate) -> Goal:
+def create_goal(
+    db: Session, user_id: uuid.UUID, goal_data: GoalCreate
+) -> Goal | None:
     """새로운 저축 목표를 생성한다.
 
     Args:
@@ -20,8 +23,19 @@ def create_goal(db: Session, user_id: uuid.UUID, goal_data: GoalCreate) -> Goal:
         goal_data: 생성 요청 데이터.
 
     Returns:
-        생성된 Goal 객체.
+        생성된 Goal 객체. 카테고리 검증 실패 시 None.
     """
+    category = (
+        db.query(Category)
+        .filter(
+            Category.id == goal_data.category_id,
+            (Category.user_id == None) | (Category.user_id == user_id),
+        )
+        .first()
+    )
+    if not category:
+        return None
+
     new_goal = Goal(
         user_id=user_id,
         name=goal_data.name,
