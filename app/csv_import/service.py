@@ -70,15 +70,25 @@ def process_import_batch(
         if row_hash in existing_hashes:
             result.duplicate_count += 1
             continue
-            
+
+        # 카테고리 텍스트 자동 매칭 (매칭 실패 시 type별 시스템 기본 카테고리로 폴백)
+        category_id = category_map.get(row.category)
+
+        if category_id is None:
+            fallback_name = "기타수익" if row.type == "INCOME" else "식비"
+            category_id = category_map.get(fallback_name)
+
+        if category_id is None:
+            result.errors.append(
+                f"Row {row.row_number}: 카테고리 '{row.category}' 매칭 실패 + 폴백 카테고리 없음"
+            )
+            continue
+
         # 중복이 아닌 유효한 데이터 통과
         new_hashes_to_insert.append(ImportHash(user_id=user_id, hash=row_hash))
         result.valid_rows.append(row)
         result.imported_count += 1
-        
-        # 카테고리 텍스트 자동 매칭 (매칭 실패 시 None으로 처리되어 기본값 할당 유도)
-        category_id = category_map.get(row.category)
-        
+
         transactions_to_insert.append(
             Transaction(
                 user_id=user_id,
@@ -86,7 +96,7 @@ def process_import_batch(
                 type=row.type,
                 amount=row.amount,
                 transaction_date=row.transaction_date,
-                memo=row.memo
+                description=row.memo,
             )
         )
         
