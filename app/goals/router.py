@@ -55,6 +55,21 @@ def get_goal(
     return goal
 
 
+@router.get("/{goal_id}/progress", response_model=schemas.GoalProgressResponse)
+def get_goal_progress(
+    goal_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """저축 목표 진행률 조회 (진행률, 남은 금액, 남은 기간, 상태)."""
+    progress = service.get_goal_progress(db, goal_id, current_user.id)
+
+    if not progress:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    return progress
+
+
 @router.patch("/{goal_id}", response_model=schemas.GoalResponse)
 def update_goal(
     goal_id: uuid.UUID,

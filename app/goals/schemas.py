@@ -43,3 +43,15 @@ class GoalResponse(BaseModel):
     achieved_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class GoalProgressResponse(BaseModel):
+    """저축 목표 진행률 응답 스키마."""
+
+    goal_id: uuid.UUID
+    target_amount: float
+    current_amount: float
+    progress_percentage: float
+    remaining_amount: float
+    days_remaining: int | None
+    status: str
