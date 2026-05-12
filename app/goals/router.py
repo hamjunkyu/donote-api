@@ -105,6 +105,24 @@ def get_goal_forecast(
     return forecast
 
 
+@router.patch("/{goal_id}/cancel", response_model=schemas.GoalResponse)
+def cancel_goal(
+    goal_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """진행 중인 저축 목표를 취소 상태로 변경 (삭제와 달리 기록 보존)."""
+    goal = service.cancel_goal(db, goal_id, current_user.id)
+
+    if not goal:
+        raise HTTPException(
+            status_code=404,
+            detail="Goal not found or not in progress",
+        )
+
+    return goal
+
+
 @router.patch("/{goal_id}", response_model=schemas.GoalResponse)
 def update_goal(
     goal_id: uuid.UUID,

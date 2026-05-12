@@ -278,6 +278,32 @@ def forecast_completion(
     }
 
 
+def cancel_goal(
+    db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
+) -> Goal | None:
+    """진행 중인 저축 목표를 취소 상태(CANCELLED)로 변경한다.
+
+    삭제와 달리 기록은 보존되며, 이미 ACHIEVED/EXPIRED/CANCELLED 상태인 경우 None을 반환.
+    """
+    goal = (
+        db.query(Goal)
+        .filter(Goal.id == goal_id, Goal.user_id == user_id)
+        .first()
+    )
+
+    if not goal:
+        return None
+
+    if goal.status != "IN_PROGRESS":
+        return None
+
+    goal.status = "CANCELLED"
+    db.commit()
+    db.refresh(goal)
+
+    return goal
+
+
 def delete_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> Goal | None:
     """저축 목표를 영구 삭제한다."""
     goal = (
