@@ -55,3 +55,28 @@ class GoalProgressResponse(BaseModel):
     remaining_amount: float
     days_remaining: int | None
     status: str
+
+
+class ContributingTransactionResponse(BaseModel):
+    """저축 목표 기여 거래 응답 스키마."""
+
+    id: uuid.UUID
+    amount: float
+    description: str | None
+    transaction_date: date
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class GoalForecastResponse(BaseModel):
+    """저축 목표 예상 달성일 응답 스키마."""
+
+    goal_id: uuid.UUID
+    current_amount: float
+    target_amount: float
+    remaining_amount: float
+    daily_average: float
+    days_to_achievement: int | None
+    forecast_date: date | None
+    on_track: bool | None

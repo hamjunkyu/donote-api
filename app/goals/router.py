@@ -70,6 +70,41 @@ def get_goal_progress(
     return progress
 
 
+@router.get(
+    "/{goal_id}/transactions",
+    response_model=list[schemas.ContributingTransactionResponse],
+)
+def get_goal_transactions(
+    goal_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """저축 목표 달성에 기여한 거래 내역을 시간순으로 조회."""
+    transactions = service.get_contributing_transactions(
+        db, goal_id, current_user.id
+    )
+
+    if transactions is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    return transactions
+
+
+@router.get("/{goal_id}/forecast", response_model=schemas.GoalForecastResponse)
+def get_goal_forecast(
+    goal_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """저축 목표 예상 달성일 조회."""
+    forecast = service.forecast_completion(db, goal_id, current_user.id)
+
+    if not forecast:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    return forecast
+
+
 @router.patch("/{goal_id}", response_model=schemas.GoalResponse)
 def update_goal(
     goal_id: uuid.UUID,
