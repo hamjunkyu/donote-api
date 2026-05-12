@@ -25,6 +25,7 @@ class GoalUpdate(BaseModel):
     name: str | None = None
     target_amount: float | None = Field(default=None, gt=0)
     target_date: date | None = None
+    category_id: uuid.UUID | None = None
     description: str | None = None
 
 

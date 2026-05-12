@@ -83,7 +83,10 @@ def update_goal(
     user_id: uuid.UUID,
     goal_update: GoalUpdate,
 ) -> Goal | None:
-    """저축 목표 정보를 부분 수정한다."""
+    """저축 목표 정보를 부분 수정한다.
+
+    category_id 변경 시 새 카테고리의 소유권을 검증한다.
+    """
     goal = (
         db.query(Goal)
         .filter(Goal.id == goal_id, Goal.user_id == user_id)
@@ -92,6 +95,19 @@ def update_goal(
 
     if not goal:
         return None
+
+    if goal_update.category_id is not None:
+        category = (
+            db.query(Category)
+            .filter(
+                Category.id == goal_update.category_id,
+                (Category.user_id == None) | (Category.user_id == user_id),
+            )
+            .first()
+        )
+        if not category:
+            return None
+        goal.category_id = goal_update.category_id
 
     if goal_update.name is not None:
         goal.name = goal_update.name
