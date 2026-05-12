@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from . import models, schemas
 from app.settlements import models as settlement_models
 from app.budgets.service import check_and_notify_budget_threshold
+from app.goals.service import check_and_notify_goal_achievement
 
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user):
@@ -22,6 +23,7 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, curr
 
     if db_transaction.type == "EXPENSE":
         check_and_notify_budget_threshold(db, current_user.id, db_transaction.transaction_date)
+        check_and_notify_goal_achievement(db, current_user.id, db_transaction.category_id)
 
     return db_transaction
 
@@ -71,6 +73,7 @@ def update_transaction(db: Session, transaction_id, transaction_update: schemas.
 
     if transaction.type == "EXPENSE":
         check_and_notify_budget_threshold(db, current_user.id, transaction.transaction_date)
+        check_and_notify_goal_achievement(db, current_user.id, transaction.category_id)
 
     return transaction
 

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.categories.models import Category
 from app.goals.models import Goal
 from app.goals.schemas import GoalCreate, GoalUpdate
+from app.notifications.service import create_notification
 from app.transactions.models import Transaction
 
 
@@ -276,6 +277,37 @@ def forecast_completion(
         "forecast_date": forecast_date,
         "on_track": on_track,
     }
+
+
+def check_and_notify_goal_achievement(
+    db: Session, user_id: uuid.UUID, category_id: uuid.UUID
+) -> None:
+    """거래 생성/수정 시 호출되어 해당 카테고리에 연결된 목표의 달성 여부를 확인하고
+    100% 도달 시 ACHIEVED 상태로 변경하고 알림을 생성한다.
+    """
+    goals = (
+        db.query(Goal)
+        .filter(
+            Goal.user_id == user_id,
+            Goal.category_id == category_id,
+            Goal.status == "IN_PROGRESS",
+        )
+        .all()
+    )
+
+    for goal in goals:
+        current_amount = calculate_progress(db, goal)
+        if current_amount >= float(goal.target_amount):
+            goal.status = "ACHIEVED"
+            goal.achieved_at = datetime.utcnow()
+            create_notification(
+                db,
+                user_id,
+                "GOAL_ACHIEVED",
+                f"🎉 목표 달성! {goal.name}",
+            )
+
+    db.commit()
 
 
 def cancel_goal(
