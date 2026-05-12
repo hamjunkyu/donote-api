@@ -1,6 +1,7 @@
 """Donote API 애플리케이션 진입점."""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.router import router as auth_router
 from app.transactions.router import router as transactions_router
@@ -16,6 +17,15 @@ app = FastAPI(
     title="Donote API",
     description="개인 재무 관리 + 더치페이 정산 API",
     version="0.1.0",
+)
+
+# 프론트엔드(Vite 개발 서버 등)와 통신하기 위한 CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth_router)

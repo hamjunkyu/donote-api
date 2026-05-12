@@ -25,3 +25,17 @@ class CustomSplitRequest(BaseModel):
 
 class SettlementUpdate(BaseModel):
     split_type: Optional[Literal["EQUAL", "CUSTOM"]] = None
+
+from datetime import datetime
+
+class SettlementResponse(BaseModel):
+    id: uuid.UUID
+    transaction_id: uuid.UUID
+    creator_id: uuid.UUID
+    total_amount: float
+    split_type: str
+    status: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

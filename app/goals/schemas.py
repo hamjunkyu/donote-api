@@ -35,6 +35,7 @@ class GoalResponse(BaseModel):
     user_id: uuid.UUID
     name: str
     target_amount: float
+    current_amount: float = 0.0
     target_date: date | None
     category_id: uuid.UUID
     description: str | None

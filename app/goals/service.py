@@ -10,6 +10,39 @@ from sqlalchemy.orm import Session
 from app.categories.models import Category
 from app.goals.models import Goal
 from app.goals.schemas import GoalCreate, GoalUpdate
+from app.transactions.models import Transaction
+from app.notifications.service import create_notification
+from sqlalchemy import func
+from datetime import datetime
+
+def _attach_current_amount(db: Session, goal: Goal) -> Goal:
+    if not goal:
+        return goal
+    total = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.category_id == goal.category_id,
+        Transaction.user_id == goal.user_id
+    ).scalar()
+    goal.current_amount = float(total or 0.0)
+    return goal
+
+def check_and_notify_goal_achievement(db: Session, user_id: uuid.UUID, category_id: uuid.UUID):
+    # Find active goals for this category
+    goals = db.query(Goal).filter(
+        Goal.user_id == user_id,
+        Goal.category_id == category_id,
+        Goal.status == "IN_PROGRESS"
+    ).all()
+    
+    for goal in goals:
+        _attach_current_amount(db, goal)
+        if goal.current_amount >= goal.target_amount:
+            goal.status = "ACHIEVED"
+            goal.achieved_at = datetime.utcnow()
+            create_notification(
+                db, user_id, "GOAL_ACHIEVED",
+                f"🎉 목표 달성! {goal.name}"
+            )
+    db.commit()
 
 
 def create_goal(
@@ -49,28 +82,32 @@ def create_goal(
     db.commit()
     db.refresh(new_goal)
 
-    return new_goal
+    return _attach_current_amount(db, new_goal)
 
 
 def get_goals(db: Session, user_id: uuid.UUID) -> list[Goal]:
     """사용자의 모든 저축 목표를 최신순으로 조회한다."""
-    return (
+    goals = (
         db.query(Goal)
         .filter(Goal.user_id == user_id)
         .order_by(Goal.created_at.desc())
         .all()
     )
+    for g in goals:
+        _attach_current_amount(db, g)
+    return goals
 
 
 def get_goal_by_id(
     db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
 ) -> Goal | None:
     """특정 저축 목표를 조회한다."""
-    return (
+    goal = (
         db.query(Goal)
         .filter(Goal.id == goal_id, Goal.user_id == user_id)
         .first()
     )
+    return _attach_current_amount(db, goal)
 
 
 def update_goal(
@@ -101,7 +138,7 @@ def update_goal(
     db.commit()
     db.refresh(goal)
 
-    return goal
+    return _attach_current_amount(db, goal)
 
 
 def delete_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> Goal | None:

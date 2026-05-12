@@ -316,3 +316,8 @@ def delete_settlement(db: Session, settlement_id, current_user):
     db.commit()
 
     return settlement
+
+def get_user_settlements(db: Session, current_user):
+    return db.query(models.Settlement).filter(
+        models.Settlement.creator_id == current_user.id
+    ).order_by(models.Settlement.created_at.desc()).all()

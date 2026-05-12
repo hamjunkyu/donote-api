@@ -23,9 +23,9 @@ class BudgetResponse(BudgetBase):
 
 class BudgetUsageResponse(BaseModel):
     """예산 소진 현황 응답 스키마."""
-    budget_id: Optional[uuid.UUID]
-    category_id: Optional[uuid.UUID]
-    category_name: Optional[str]
+    budget_id: Optional[uuid.UUID] = None
+    category_id: Optional[uuid.UUID] = None
+    category_name: Optional[str] = None
     budget_amount: float
     spent_amount: float
     usage_percentage: float

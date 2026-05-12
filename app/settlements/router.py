@@ -8,6 +8,15 @@ from . import schemas, service
 
 router = APIRouter(prefix="/api/settlements", tags=["Settlements"])
 
+from typing import List
+
+@router.get("/", response_model=List[schemas.SettlementResponse])
+def get_settlements(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return service.get_user_settlements(db, current_user)
+
 
 @router.post("/")
 def create_settlement(
