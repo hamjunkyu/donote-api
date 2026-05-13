@@ -9,7 +9,7 @@ from app.auth.dependencies import get_current_user
 from .schemas import CategoryResponse, CategoryCreate, CategoryUpdate
 from . import service
 
-router = APIRouter()
+router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
 @router.get("/", response_model=List[CategoryResponse], summary="카테고리 목록 조회")
 def list_categories(
