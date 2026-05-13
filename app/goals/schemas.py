@@ -81,3 +81,17 @@ class GoalForecastResponse(BaseModel):
     days_to_achievement: int | None
     forecast_date: date | None
     on_track: bool | None
+
+
+class MonthlyTrendItem(BaseModel):
+    """월별 저축액 단일 항목."""
+
+    year_month: str
+    amount: float
+
+
+class GoalMonthlyTrendResponse(BaseModel):
+    """저축 목표 월별 저축 추이 응답 스키마."""
+
+    goal_id: uuid.UUID
+    trend: list[MonthlyTrendItem]

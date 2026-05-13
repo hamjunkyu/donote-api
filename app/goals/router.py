@@ -105,6 +105,24 @@ def get_goal_forecast(
     return forecast
 
 
+@router.get(
+    "/{goal_id}/monthly-trend",
+    response_model=schemas.GoalMonthlyTrendResponse,
+)
+def get_goal_monthly_trend(
+    goal_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """저축 목표 월별 저축액 추이 조회."""
+    trend = service.get_monthly_trend(db, goal_id, current_user.id)
+
+    if trend is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    return {"goal_id": goal_id, "trend": trend}
+
+
 @router.patch("/{goal_id}/cancel", response_model=schemas.GoalResponse)
 def cancel_goal(
     goal_id: uuid.UUID,

@@ -295,6 +295,45 @@ def forecast_completion(
     }
 
 
+def get_monthly_trend(
+    db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
+) -> list[dict] | None:
+    """저축 목표의 월별 저축액 추이를 시간순으로 조회한다.
+
+    연결 카테고리의 EXPENSE 거래를 month 단위로 집계.
+    """
+    goal = (
+        db.query(Goal)
+        .filter(Goal.id == goal_id, Goal.user_id == user_id)
+        .first()
+    )
+    if not goal:
+        return None
+
+    year_month_expr = func.to_char(Transaction.transaction_date, "YYYY-MM")
+
+    rows = (
+        db.query(
+            year_month_expr.label("year_month"),
+            func.coalesce(func.sum(Transaction.amount), 0).label("amount"),
+        )
+        .filter(
+            Transaction.user_id == goal.user_id,
+            Transaction.category_id == goal.category_id,
+            Transaction.type == "EXPENSE",
+            Transaction.created_at >= goal.created_at,
+        )
+        .group_by(year_month_expr)
+        .order_by(year_month_expr.asc())
+        .all()
+    )
+
+    return [
+        {"year_month": row.year_month, "amount": float(row.amount)}
+        for row in rows
+    ]
+
+
 def check_and_notify_goal_achievement(
     db: Session, user_id: uuid.UUID, category_id: uuid.UUID
 ) -> None:
