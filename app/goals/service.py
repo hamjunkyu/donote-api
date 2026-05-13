@@ -166,7 +166,11 @@ def determine_status(goal: Goal, current_amount: float) -> str:
     if goal.status == "CANCELLED":
         return "CANCELLED"
 
-    progress_ratio = current_amount / float(goal.target_amount)
+    target = float(goal.target_amount)
+    if target <= 0:
+        return "ACHIEVED" if current_amount > 0 else "IN_PROGRESS"
+
+    progress_ratio = current_amount / target
 
     if progress_ratio >= 1.0:
         return "ACHIEVED"
@@ -203,8 +207,9 @@ def get_goal_progress(
         return None
 
     current_amount = calculate_progress(db, goal)
-    progress_percentage = (current_amount / float(goal.target_amount)) * 100
-    remaining_amount = max(float(goal.target_amount) - current_amount, 0)
+    target = float(goal.target_amount)
+    progress_percentage = (current_amount / target * 100) if target > 0 else 0.0
+    remaining_amount = max(target - current_amount, 0)
     days_remaining = (
         (goal.target_date - date.today()).days if goal.target_date else None
     )
@@ -357,10 +362,14 @@ def check_and_notify_goal_achievement(
     )
 
     for goal in goals:
+        if goal.is_achieved_notified:
+            continue
+
         current_amount = calculate_progress(db, goal)
         if current_amount >= float(goal.target_amount):
             goal.status = "ACHIEVED"
             goal.achieved_at = datetime.utcnow()
+            goal.is_achieved_notified = True
             create_notification(
                 db,
                 user_id,
