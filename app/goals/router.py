@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -33,11 +33,15 @@ def create_goal(
 
 @router.get("/", response_model=list[schemas.GoalResponse])
 def get_goals(
+    status: str | None = Query(
+        default=None,
+        description="목표 상태 필터 (IN_PROGRESS/ACHIEVED/EXPIRED/CANCELLED)",
+    ),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """현재 사용자의 모든 저축 목표 조회."""
-    return service.get_goals(db, current_user.id)
+    """저축 목표 조회. status 파라미터로 상태별 필터링 가능 (예: 달성 내역은 status=ACHIEVED)."""
+    return service.get_goals(db, current_user.id, status)
 
 
 @router.get("/{goal_id}", response_model=schemas.GoalResponse)

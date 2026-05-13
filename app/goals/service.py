@@ -56,14 +56,20 @@ def create_goal(
     return new_goal
 
 
-def get_goals(db: Session, user_id: uuid.UUID) -> list[Goal]:
-    """사용자의 모든 저축 목표를 최신순으로 조회한다."""
-    return (
-        db.query(Goal)
-        .filter(Goal.user_id == user_id)
-        .order_by(Goal.created_at.desc())
-        .all()
-    )
+def get_goals(
+    db: Session, user_id: uuid.UUID, status: str | None = None
+) -> list[Goal]:
+    """사용자의 저축 목표를 최신순으로 조회한다.
+
+    status 파라미터로 특정 상태(IN_PROGRESS/ACHIEVED/EXPIRED/CANCELLED)만 필터링 가능.
+    예: status='ACHIEVED' → 달성 내역 조회.
+    """
+    query = db.query(Goal).filter(Goal.user_id == user_id)
+
+    if status:
+        query = query.filter(Goal.status == status)
+
+    return query.order_by(Goal.created_at.desc()).all()
 
 
 def get_goal_by_id(
