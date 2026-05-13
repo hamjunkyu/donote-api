@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict
 import uuid
-from typing import List, Literal
-from typing import Optional, Literal
+from typing import List, Literal, Optional
 
 
 class SettlementCreate(BaseModel):
@@ -25,3 +25,15 @@ class CustomSplitRequest(BaseModel):
 
 class SettlementUpdate(BaseModel):
     split_type: Optional[Literal["EQUAL", "CUSTOM"]] = None
+
+
+class SettlementResponse(BaseModel):
+    id: uuid.UUID
+    transaction_id: uuid.UUID
+    creator_id: uuid.UUID
+    total_amount: float
+    split_type: str
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

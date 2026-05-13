@@ -1,4 +1,5 @@
 import uuid
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -7,6 +8,14 @@ from . import schemas, service
 
 
 router = APIRouter(prefix="/api/settlements", tags=["Settlements"])
+
+
+@router.get("/", response_model=List[schemas.SettlementResponse])
+def list_settlements(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return service.get_user_settlements(db, current_user)
 
 
 @router.post("/")
