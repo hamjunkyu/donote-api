@@ -25,6 +25,7 @@ class GoalUpdate(BaseModel):
     name: str | None = None
     target_amount: float | None = Field(default=None, gt=0)
     target_date: date | None = None
+    category_id: uuid.UUID | None = None
     description: str | None = None
 
 
@@ -43,3 +44,54 @@ class GoalResponse(BaseModel):
     achieved_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class GoalProgressResponse(BaseModel):
+    """저축 목표 진행률 응답 스키마."""
+
+    goal_id: uuid.UUID
+    target_amount: float
+    current_amount: float
+    progress_percentage: float
+    remaining_amount: float
+    days_remaining: int | None
+    status: str
+
+
+class ContributingTransactionResponse(BaseModel):
+    """저축 목표 기여 거래 응답 스키마."""
+
+    id: uuid.UUID
+    amount: float
+    description: str | None
+    transaction_date: date
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class GoalForecastResponse(BaseModel):
+    """저축 목표 예상 달성일 응답 스키마."""
+
+    goal_id: uuid.UUID
+    current_amount: float
+    target_amount: float
+    remaining_amount: float
+    daily_average: float
+    days_to_achievement: int | None
+    forecast_date: date | None
+    on_track: bool | None
+
+
+class MonthlyTrendItem(BaseModel):
+    """월별 저축액 단일 항목."""
+
+    year_month: str
+    amount: float
+
+
+class GoalMonthlyTrendResponse(BaseModel):
+    """저축 목표 월별 저축 추이 응답 스키마."""
+
+    goal_id: uuid.UUID
+    trend: list[MonthlyTrendItem]

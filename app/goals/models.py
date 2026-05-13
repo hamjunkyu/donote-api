@@ -45,3 +45,4 @@ class Goal(Base):
         DateTime, default=datetime.utcnow, nullable=False
     )
     achieved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    is_achieved_notified: Mapped[bool] = mapped_column(default=False, nullable=False)
