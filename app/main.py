@@ -1,21 +1,38 @@
 """Donote API 애플리케이션 진입점."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.auth.router import router as auth_router
-from app.transactions.router import router as transactions_router
-from app.categories.router import router as categories_router
-from app.statistics.router import router as statistics_router
 from app.budgets.router import router as budgets_router
-from app.settlements.router import router as settlements_router
+from app.categories.router import router as categories_router
+from app.categories.service import init_default_categories
 from app.csv_import.router import router as csv_import_router
-from app.notifications.router import router as notifications_router
+from app.database import SessionLocal
 from app.goals.router import router as goals_router
+from app.notifications.router import router as notifications_router
+from app.settlements.router import router as settlements_router
+from app.statistics.router import router as statistics_router
+from app.transactions.router import router as transactions_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """애플리케이션 시작 시 시스템 기본 카테고리 시드."""
+    db = SessionLocal()
+    try:
+        init_default_categories(db)
+    finally:
+        db.close()
+    yield
+
 
 app = FastAPI(
     title="Donote API",
     description="개인 재무 관리 + 더치페이 정산 API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.include_router(auth_router)
