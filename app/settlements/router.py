@@ -203,6 +203,22 @@ def revert_settlement(
 
 
 @router.patch(
+    "/{settlement_id}/cancel",
+    response_model=schemas.SettlementResponse,
+)
+def cancel_settlement(
+    settlement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """정산 취소. status를 CANCELLED로 변경 (기록 보존, 실부담액 계산에서 제외)."""
+    result = service.cancel_settlement(db, settlement_id, current_user)
+    if not result:
+        raise HTTPException(status_code=404, detail="정산을 찾을 수 없습니다")
+    return result
+
+
+@router.patch(
     "/participants/{participant_id}/settle",
     response_model=schemas.ParticipantResponse,
 )

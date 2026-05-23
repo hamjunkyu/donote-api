@@ -45,7 +45,7 @@ def _ensure_modifiable(settlement: models.Settlement) -> None:
         )
 
 
-def _validate_creator_share(db: Session, settlement_id, exclude_participant_id=None) -> None:
+def _validate_creator_share(db: Session, settlement_id) -> None:
     """내 몫 ≥ 0 검증. settlement.total_amount >= SUM(participants.amount)."""
     settlement = db.query(models.Settlement).filter(
         models.Settlement.id == settlement_id
@@ -53,13 +53,12 @@ def _validate_creator_share(db: Session, settlement_id, exclude_participant_id=N
     if not settlement:
         return
 
-    query = db.query(models.SettlementParticipant).filter(
-        models.SettlementParticipant.settlement_id == settlement_id
+    total_participants = sum(
+        int(p.amount)
+        for p in db.query(models.SettlementParticipant).filter(
+            models.SettlementParticipant.settlement_id == settlement_id
+        ).all()
     )
-    if exclude_participant_id:
-        query = query.filter(models.SettlementParticipant.id != exclude_participant_id)
-
-    total_participants = sum(int(p.amount) for p in query.all())
     if total_participants > int(settlement.total_amount):
         raise HTTPException(
             status_code=400,
@@ -76,6 +75,12 @@ def create_settlement(db: Session, settlement: schemas.SettlementCreate, current
 
     if not transaction:
         return None
+
+    if transaction.type != "EXPENSE":
+        raise HTTPException(
+            status_code=400,
+            detail="지출(EXPENSE) 거래만 정산 생성 가능합니다",
+        )
 
     # 이미 정산 있는지 체크 (Settlement.transaction_id 는 UNIQUE)
     existing = db.query(models.Settlement).filter(
@@ -348,7 +353,7 @@ def revert_completion(db: Session, settlement_id, current_user):
 
 
 def mark_participant_settled(db: Session, participant_id, current_user):
-    """참여자 SETTLED 처리. 마지막 SETTLED 시 정산 자동 COMPLETED."""
+    """참여자 SETTLED 처리. creator 또는 회원 참여자 본인이 호출 가능. 마지막 SETTLED 시 정산 자동 COMPLETED."""
     participant = db.query(models.SettlementParticipant).filter(
         models.SettlementParticipant.id == participant_id
     ).first()
@@ -360,7 +365,12 @@ def mark_participant_settled(db: Session, participant_id, current_user):
         models.Settlement.id == participant.settlement_id
     ).first()
 
-    if not settlement or settlement.creator_id != current_user.id:
+    if not settlement:
+        return None
+
+    is_creator = settlement.creator_id == current_user.id
+    is_participant_self = participant.user_id == current_user.id
+    if not is_creator and not is_participant_self:
         return None
 
     if settlement.status != "PENDING":
@@ -388,7 +398,7 @@ def mark_participant_settled(db: Session, participant_id, current_user):
 
 
 def revert_participant(db: Session, participant_id, current_user):
-    """참여자 SETTLED → PENDING 복원."""
+    """참여자 SETTLED → PENDING 복원. creator 또는 회원 참여자 본인이 호출 가능."""
     participant = db.query(models.SettlementParticipant).filter(
         models.SettlementParticipant.id == participant_id
     ).first()
@@ -400,7 +410,12 @@ def revert_participant(db: Session, participant_id, current_user):
         models.Settlement.id == participant.settlement_id
     ).first()
 
-    if not settlement or settlement.creator_id != current_user.id:
+    if not settlement:
+        return None
+
+    is_creator = settlement.creator_id == current_user.id
+    is_participant_self = participant.user_id == current_user.id
+    if not is_creator and not is_participant_self:
         return None
 
     if participant.status != "SETTLED":
@@ -509,6 +524,22 @@ def delete_settlement(db: Session, settlement_id, current_user):
 
     db.delete(settlement)
     db.commit()
+
+    return settlement
+
+
+def cancel_settlement(db: Session, settlement_id, current_user):
+    """정산 취소. status를 CANCELLED로 변경 (기록 보존, 실부담액 계산에서 제외)."""
+    settlement = _get_owned_settlement(db, settlement_id, current_user)
+    if not settlement:
+        return None
+
+    if settlement.status == "CANCELLED":
+        return settlement
+
+    settlement.status = "CANCELLED"
+    db.commit()
+    db.refresh(settlement)
 
     return settlement
 
