@@ -42,6 +42,9 @@ class GoalResponse(BaseModel):
     status: str
     created_at: datetime
     achieved_at: datetime | None
+    current_amount: float
+    progress_percentage: float
+    remaining_amount: float
 
     model_config = {"from_attributes": True}
 

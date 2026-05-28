@@ -13,6 +13,25 @@ from app.goals import schemas, service
 router = APIRouter(prefix="/api/goals", tags=["Goals"])
 
 
+def _map_goal_response(goal) -> schemas.GoalResponse:
+    """SQLAlchemy Goal 객체를 schemas.GoalResponse로 매핑하며 계산된 상태(computed_status)를 주입합니다."""
+    return schemas.GoalResponse(
+        id=goal.id,
+        user_id=goal.user_id,
+        name=goal.name,
+        target_amount=float(goal.target_amount),
+        target_date=goal.target_date,
+        category_id=goal.category_id,
+        description=goal.description,
+        status=goal.computed_status,
+        created_at=goal.created_at,
+        achieved_at=goal.achieved_at,
+        current_amount=goal.current_amount,
+        progress_percentage=goal.progress_percentage,
+        remaining_amount=goal.remaining_amount,
+    )
+
+
 @router.post("/", response_model=schemas.GoalResponse, status_code=201)
 def create_goal(
     goal: schemas.GoalCreate,
@@ -28,20 +47,21 @@ def create_goal(
             detail="Invalid or unauthorized category",
         )
 
-    return new_goal
+    return _map_goal_response(new_goal)
 
 
 @router.get("/", response_model=list[schemas.GoalResponse])
 def get_goals(
     status: str | None = Query(
         default=None,
-        description="목표 상태 필터 (IN_PROGRESS/ACHIEVED/EXPIRED/CANCELLED)",
+        description="목표 상태 필터 (IN_PROGRESS/ACHIEVED/EXPIRED/CANCELLED/ON_TRACK/BEHIND)",
     ),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """저축 목표 조회. status 파라미터로 상태별 필터링 가능 (예: 달성 내역은 status=ACHIEVED)."""
-    return service.get_goals(db, current_user.id, status)
+    """저축 목표 조회. status 파라미터로 상태별 필터링 가능 (예: 달성 내역은 status=ACHIEVED, 뒤처짐은 status=BEHIND)."""
+    goals = service.get_goals(db, current_user.id, status)
+    return [_map_goal_response(g) for g in goals]
 
 
 @router.get("/{goal_id}", response_model=schemas.GoalResponse)
@@ -56,7 +76,7 @@ def get_goal(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    return goal
+    return _map_goal_response(goal)
 
 
 @router.get("/{goal_id}/progress", response_model=schemas.GoalProgressResponse)
@@ -142,7 +162,7 @@ def cancel_goal(
             detail="Goal not found or not in progress",
         )
 
-    return goal
+    return _map_goal_response(goal)
 
 
 @router.patch("/{goal_id}", response_model=schemas.GoalResponse)
@@ -158,7 +178,7 @@ def update_goal(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    return goal
+    return _map_goal_response(goal)
 
 
 @router.delete("/{goal_id}")
