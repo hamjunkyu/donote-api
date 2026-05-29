@@ -12,7 +12,6 @@ from app.main import app
 from app.auth.dependencies import get_current_user
 from app.auth.models import User
 
-# 2번 피드백 보완: 테스트 DB가 존재하지 않을 경우 pg_database를 조회하여 CREATE DATABASE 수행
 def create_test_db_if_not_exists():
     """테스트용 데이터베이스가 없으면 postgres 기본 DB에 붙어서 생성해 줍니다."""
     try:

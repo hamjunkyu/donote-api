@@ -167,7 +167,7 @@ def test_goal_milestones_and_refiring(auth_client, test_user, test_category, db)
 
 
 def test_goal_border_day_status(auth_client, test_user, test_category, db):
-    # 오늘이 마감일인데 목표 달성액이 부족한 경우 -> BEHIND로 올바르게 상태 판정되는지 검증 (E-A3 픽스)
+    # 오늘이 마감일인데 목표 달성액이 부족한 경우 -> BEHIND로 올바르게 상태 판정되는지 검증
     goal = Goal(
         id=uuid.uuid4(),
         user_id=test_user.id,

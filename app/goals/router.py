@@ -15,8 +15,7 @@ router = APIRouter(prefix="/api/goals", tags=["Goals"])
 
 
 def _map_goal_response(goal_dto: dict) -> schemas.GoalResponse:
-    """10번 피드백: service로부터 dynamic attribute가 부착된 ORM 대신 정밀 가공된 DTO를 건네받아,
-    schemas.GoalResponse 객체로 안전하고 정적으로 빌드하여 반환합니다."""
+    """service 의 dict DTO 를 schemas.GoalResponse 로 변환."""
     return schemas.GoalResponse(
         id=goal_dto["id"],
         user_id=goal_dto["user_id"],

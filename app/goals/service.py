@@ -16,7 +16,7 @@ from app.notifications.service import create_notification
 from app.transactions.models import Transaction
 
 
-# 8번 피드백: 동일 set을 모듈 상단 상수로 추출
+# DB persist 대상 status (ON_TRACK/BEHIND 는 computed-only)
 PERSIST_STATES = {"IN_PROGRESS", "ACHIEVED", "EXPIRED", "CANCELLED"}
 
 
@@ -36,7 +36,7 @@ def _goal_progress_subquery():
 
 
 def _to_goal_dto(goal: Goal, current_amount: float, computed_status: str) -> dict:
-    """10번 피드백: dynamic setattr 안티패턴을 피하기 위한 DTO(dict) 반환 조립 함수."""
+    """Goal ORM 객체 + 계산된 필드를 GoalResponse 매핑용 dict 로 변환."""
     target = float(goal.target_amount)
     progress_percentage = round((current_amount / target * 100) if target > 0 else 0.0, 2)
     remaining_amount = max(target - current_amount, 0)
@@ -90,7 +90,6 @@ def create_goal(
     current_amount = 0.0
     computed_status = determine_status(new_goal, current_amount)
 
-    # 6번 피드백: get_goal_by_id 중복 SELECT 제거하고 즉시 DTO 반환
     return _to_goal_dto(new_goal, current_amount, computed_status)
 
 
@@ -115,9 +114,8 @@ def get_goals(
             goal.status = computed_status
             if computed_status == "ACHIEVED" and not goal.achieved_at:
                 goal.achieved_at = datetime.utcnow()
-            # 9번 피드백: target_amount > 0 이 보장되므로 IN_PROGRESS 분기는 dead branch 삭제
             db.commit()
-            db.refresh(goal)  # 7번 피드백: get_goal_by_id/get_goal_progress와 일치하도록 refresh 추가
+            db.refresh(goal)
 
         dto = _to_goal_dto(goal, current_amount, computed_status)
 
@@ -151,9 +149,8 @@ def get_goal_by_id(
         goal.status = computed_status
         if computed_status == "ACHIEVED" and not goal.achieved_at:
             goal.achieved_at = datetime.utcnow()
-        # 9번 피드백: dead branch 제거
         db.commit()
-        db.refresh(goal)  # 7번 피드백: db.refresh() 보강하여 일관성 유지
+        db.refresh(goal)
 
     return _to_goal_dto(goal, current_amount, computed_status)
 
@@ -209,7 +206,7 @@ def update_goal(
     db.commit()
     db.refresh(goal)
 
-    # 4번 피드백: target_amount 또는 target_date 변경 시 flag reset 및 status 재계산 추가
+    # target_amount / target_date 변경 시 마일스톤 flag reset + status 재평가
     current_amount = calculate_progress(db, goal)
 
     if amount_changed or date_changed:
@@ -248,7 +245,6 @@ def update_goal(
     current_amount = calculate_progress(db, goal)
     computed_status = determine_status(goal, current_amount)
 
-    # 6번 피드백: get_goal_by_id 중복 SELECT 호출 없이 DTO 즉시 반환
     return _to_goal_dto(goal, current_amount, computed_status)
 
 
@@ -538,7 +534,6 @@ def cancel_goal(
     current_amount = calculate_progress(db, goal)
     computed_status = determine_status(goal, current_amount)
 
-    # 6번 피드백 반영
     return _to_goal_dto(goal, current_amount, computed_status)
 
 

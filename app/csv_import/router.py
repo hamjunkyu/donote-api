@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-# 인증 기능이 분리된 아키텍처에 맞추어 auth 모듈 내부로 경로 교정
-from app.auth.dependencies import get_current_user 
+from app.auth.dependencies import get_current_user
 from .schemas import ImportResult
 from .service import parse_csv_content, process_csv_import
 
