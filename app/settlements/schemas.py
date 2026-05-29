@@ -22,11 +22,16 @@ class ParticipantCreate(BaseModel):
 
 class CustomSplitItem(BaseModel):
     participant_id: uuid.UUID
-    amount: int = Field(..., ge=0)
+    amount: int = Field(..., gt=0)
 
 
 class CustomSplitRequest(BaseModel):
     splits: List[CustomSplitItem]
+
+
+class SplitEqualRequest(BaseModel):
+    """균등 분배 요청. 특정 참여자 amount 고정 후 나머지 인원 자동 재분배 (creator 포함)."""
+    fixed_participant_ids: List[uuid.UUID] = Field(default_factory=list)
 
 
 class SettlementUpdate(BaseModel):

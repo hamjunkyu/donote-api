@@ -1,7 +1,7 @@
 """더치페이 정산 API 라우터.
 
-핵심 디자인:
-- Creator NOT in participants (spec 6.3 ①).
+핵심 동작:
+- Creator 는 SettlementParticipant 에 추가하지 않음.
 - 모든 endpoint 권한 검증 (creator_id == current_user.id).
 - COMPLETED 정산 수정 차단, SETTLED 참여자 amount/제거 차단.
 - 마지막 SETTLED 시 정산 자동 COMPLETED 전환.
@@ -90,11 +90,17 @@ def remove_participant(
 )
 def equal_split(
     settlement_id: uuid.UUID,
+    split_data: Optional[schemas.SplitEqualRequest] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """균등 분배. per_person = total // (N+1). creator 가 나머지 흡수."""
-    result = service.split_equal(db, settlement_id, current_user)
+    """균등 분배. per_person = total // (N+1). creator 가 나머지 흡수.
+
+    body의 fixed_participant_ids 지정 시 해당 참여자는 금액 유지,
+    나머지 인원이 잔여 금액 자동 재분배.
+    """
+    fixed_ids = split_data.fixed_participant_ids if split_data else None
+    result = service.split_equal(db, settlement_id, current_user, fixed_participant_ids=fixed_ids)
     if not result:
         raise HTTPException(status_code=404, detail="정산을 찾을 수 없습니다")
     return result
@@ -219,32 +225,34 @@ def cancel_settlement(
 
 
 @router.patch(
-    "/participants/{participant_id}/settle",
+    "/{settlement_id}/participants/{participant_id}/settle",
     response_model=schemas.ParticipantResponse,
 )
 def mark_participant_paid(
+    settlement_id: uuid.UUID,
     participant_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """참여자 SETTLED 처리. 마지막 참여자면 정산 자동 COMPLETED."""
-    result = service.mark_participant_settled(db, participant_id, current_user)
+    result = service.mark_participant_settled(db, settlement_id, participant_id, current_user)
     if not result:
         raise HTTPException(status_code=404, detail="참여자를 찾을 수 없거나 권한이 없습니다")
     return result
 
 
 @router.patch(
-    "/participants/{participant_id}/revert",
+    "/{settlement_id}/participants/{participant_id}/revert",
     response_model=schemas.ParticipantResponse,
 )
 def revert_participant_settle(
+    settlement_id: uuid.UUID,
     participant_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """참여자 SETTLED → PENDING 복원. COMPLETED 정산도 자동 PENDING 복귀."""
-    result = service.revert_participant(db, participant_id, current_user)
+    result = service.revert_participant(db, settlement_id, participant_id, current_user)
     if result == "NOT_SETTLED":
         raise HTTPException(status_code=400, detail="SETTLED 상태가 아닙니다")
     if not result:

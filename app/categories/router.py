@@ -4,8 +4,7 @@ from typing import List
 from uuid import UUID
 
 from app.database import get_db
-# 1. 지적하신 대로 auth 모듈 내부의 정확한 경로로 수정 완료
-from app.auth.dependencies import get_current_user 
+from app.auth.dependencies import get_current_user
 from .schemas import CategoryResponse, CategoryCreate, CategoryUpdate
 from . import service
 
