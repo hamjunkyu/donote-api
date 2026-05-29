@@ -161,6 +161,29 @@ def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.get("/users/search", response_model=UserResponse)
+def search_user_by_email(
+    email: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """이메일로 사용자 검색 (정산 참여자 추가 시 회원 연결용).
+
+    Args:
+        email: 검색할 이메일 주소.
+
+    Returns:
+        검색된 사용자 정보. 없으면 404.
+    """
+    user = service.get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="등록된 사용자를 찾을 수 없습니다",
+        )
+    return user
+
+
 @router.put("/password", response_model=MessageResponse)
 def change_password(
     request: PasswordChangeRequest,

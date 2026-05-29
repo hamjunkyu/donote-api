@@ -1,9 +1,9 @@
 """더치페이 정산 비즈니스 로직.
 
-핵심 디자인 결정:
-- Creator NOT in participants (spec 6.3 ①). 본인 몫은 implicit (total - SUM(participants.amount)).
+핵심 동작:
+- Creator 는 SettlementParticipant 테이블에 추가하지 않음. 본인 몫은 implicit (total - SUM(participants.amount)).
 - split_equal: per_person = total // (N+1). 나머지는 creator 가 흡수.
-- SettlementParticipant.amount는 정수 (Numeric(12,0)).
+- SettlementParticipant.amount 는 정수 (Numeric(12,0)).
 - 모든 권한 검증: settlement.creator_id == current_user.id.
 - COMPLETED 정산은 모든 수정 차단. SETTLED 참여자는 amount/제거 차단 (revert 먼저).
 - 자동 COMPLETED: 마지막 참여자 SETTLED 시 settlement.status 자동 변경.
@@ -67,7 +67,7 @@ def _validate_creator_share(db: Session, settlement_id) -> None:
 
 
 def create_settlement(db: Session, settlement: schemas.SettlementCreate, current_user) -> Optional[models.Settlement]:
-    """정산 생성. creator는 참여자로 추가하지 않음 (spec)."""
+    """정산 생성. creator는 참여자로 추가하지 않음."""
     transaction = db.query(transaction_models.Transaction).filter(
         transaction_models.Transaction.id == settlement.transaction_id,
         transaction_models.Transaction.user_id == current_user.id,
@@ -151,20 +151,34 @@ def add_participant(
     db.commit()
     db.refresh(new_participant)
 
-    # 회원 참여자에게 알림 발생 (D2 백엔드 부분)
+    # 회원 참여자에게 알림 발생
+    # amount=0 인 경우 (split 전 임시 추가) 금액 미정 메시지로 분기
     if participant.user_id is not None:
+        if participant.amount > 0:
+            message = f"{current_user.name}님이 {participant.amount:,}원 정산을 요청했습니다"
+        else:
+            message = f"{current_user.name}님이 정산에 추가했습니다 (금액 확정 대기)"
         create_notification(
             db,
             participant.user_id,
             "SETTLEMENT_REQUEST",
-            f"{current_user.name}님이 {participant.amount:,}원 정산을 요청했습니다",
+            message,
         )
 
     return new_participant
 
 
-def split_equal(db: Session, settlement_id, current_user) -> Optional[list]:
-    """균등 분배. per_person = total // (N+1). creator 가 나머지 흡수."""
+def split_equal(
+    db: Session,
+    settlement_id,
+    current_user,
+    fixed_participant_ids: Optional[list] = None,
+) -> Optional[list]:
+    """균등 분배. per_person = total // (N+1). creator 가 나머지 흡수.
+
+    fixed_participant_ids 지정 시 해당 참여자는 금액 유지,
+    나머지 인원이 잔여 금액을 균등 재분배 (creator 포함).
+    """
     settlement = _get_owned_settlement(db, settlement_id, current_user)
     if not settlement:
         return None
@@ -181,18 +195,34 @@ def split_equal(db: Session, settlement_id, current_user) -> Optional[list]:
             detail="참여자가 없습니다",
         )
 
-    # SETTLED 참여자는 수정 차단 (재분배 영향)
-    if any(p.status == "SETTLED" for p in participants):
+    # SETTLED 참여자는 수정 차단 (재분배 영향). 단, 고정 참여자에 포함된 경우는 OK (금액 유지)
+    fixed_set = set(fixed_participant_ids or [])
+    settled_unfixed = [p for p in participants if p.status == "SETTLED" and p.id not in fixed_set]
+    if settled_unfixed:
         raise HTTPException(
             status_code=400,
             detail="SETTLED 참여자가 있어 재분배 불가. revert 후 다시 시도하세요",
         )
 
     total = int(settlement.total_amount)
-    n_total = len(participants) + 1  # creator 포함
-    per_person = total // n_total
 
-    for p in participants:
+    # 고정 참여자 합계 + 나머지 인원 재분배
+    fixed = [p for p in participants if p.id in fixed_set]
+    remaining = [p for p in participants if p.id not in fixed_set]
+
+    fixed_total = sum(int(p.amount) for p in fixed)
+    remaining_pool = total - fixed_total
+
+    if remaining_pool < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"고정 참여자 합계({fixed_total})가 총액({total})을 초과합니다",
+        )
+
+    n_remaining = len(remaining) + 1  # creator 포함
+    per_person = remaining_pool // n_remaining if n_remaining > 0 else 0
+
+    for p in remaining:
         p.amount = per_person
 
     settlement.split_type = "EQUAL"
@@ -241,13 +271,10 @@ def split_custom(
     for item in split_data.splits:
         participant_map[item.participant_id].amount = item.amount
 
-    # 내 몫 ≥ 0 검증
-    total_participants = sum(int(p.amount) for p in participants)
-    if total_participants > int(settlement.total_amount):
-        raise HTTPException(
-            status_code=400,
-            detail=f"참여자 합계({total_participants})가 총액({int(settlement.total_amount)})을 초과합니다",
-        )
+    db.flush()
+
+    # 내 몫 ≥ 0 검증 (헬퍼 사용으로 중복 제거)
+    _validate_creator_share(db, settlement_id)
 
     settlement.split_type = "CUSTOM"
 
@@ -263,10 +290,13 @@ def edit_split(
 
 
 def get_balance(db: Session, settlement_id, current_user) -> Optional[list]:
-    """본인 정산의 잔액 항목 조회. 권한 검증 포함."""
+    """본인 정산의 잔액 항목 조회. CANCELLED 정산은 빈 배열 반환 (실부담액 계산에서 제외)."""
     settlement = _get_owned_settlement(db, settlement_id, current_user)
     if not settlement:
         return None
+
+    if settlement.status == "CANCELLED":
+        return []
 
     participants = db.query(models.SettlementParticipant).filter(
         models.SettlementParticipant.settlement_id == settlement_id
@@ -284,17 +314,25 @@ def get_balance(db: Session, settlement_id, current_user) -> Optional[list]:
 
 
 def calculate_debts(db: Session, settlement_id, current_user) -> Optional[list]:
-    """채무 관계 계산. creator name 은 User 테이블에서 직접 조회 (Decision A: creator는 participants에 없음)."""
+    """채무 관계 (미수금) 계산. PENDING 참여자만 반환 (SETTLED 는 이미 송금받음 → 미수금 아님).
+
+    CANCELLED 정산은 빈 배열 (실부담액 계산에서 제외).
+    creator name 은 User 테이블에서 직접 조회 (creator는 participants에 없음).
+    """
     settlement = _get_owned_settlement(db, settlement_id, current_user)
     if not settlement:
         return None
+
+    if settlement.status == "CANCELLED":
+        return []
 
     # creator name 조회
     creator_user = db.query(User).filter(User.id == settlement.creator_id).first()
     creator_name = creator_user.name if creator_user else "creator"
 
     participants = db.query(models.SettlementParticipant).filter(
-        models.SettlementParticipant.settlement_id == settlement_id
+        models.SettlementParticipant.settlement_id == settlement_id,
+        models.SettlementParticipant.status == "PENDING",
     ).all()
 
     return [
@@ -309,7 +347,7 @@ def calculate_debts(db: Session, settlement_id, current_user) -> Optional[list]:
 
 
 def mark_settlement_complete(db: Session, settlement_id, current_user):
-    """정산 전체 완료 처리. 빈 참여자 / 미완료 참여자 가드."""
+    """정산 전체 완료 처리. 빈 참여자 / 미완료 참여자 가드. creator에게 COMPLETED 알림."""
     settlement = _get_owned_settlement(db, settlement_id, current_user)
     if not settlement:
         return None
@@ -327,10 +365,19 @@ def mark_settlement_complete(db: Session, settlement_id, current_user):
     if any(p.status != "SETTLED" for p in participants):
         return "NOT_ALL_SETTLED"
 
+    was_already_completed = settlement.status == "COMPLETED"
     settlement.status = "COMPLETED"
 
     db.commit()
     db.refresh(settlement)
+
+    if not was_already_completed:
+        create_notification(
+            db,
+            settlement.creator_id,
+            "SETTLEMENT_COMPLETED",
+            f"정산이 완료되었습니다 ({int(settlement.total_amount):,}원)",
+        )
 
     return settlement
 
@@ -352,17 +399,18 @@ def revert_completion(db: Session, settlement_id, current_user):
     return settlement
 
 
-def mark_participant_settled(db: Session, participant_id, current_user):
+def mark_participant_settled(db: Session, settlement_id, participant_id, current_user):
     """참여자 SETTLED 처리. creator 또는 회원 참여자 본인이 호출 가능. 마지막 SETTLED 시 정산 자동 COMPLETED."""
     participant = db.query(models.SettlementParticipant).filter(
-        models.SettlementParticipant.id == participant_id
+        models.SettlementParticipant.id == participant_id,
+        models.SettlementParticipant.settlement_id == settlement_id,
     ).first()
 
     if not participant:
         return None
 
     settlement = db.query(models.Settlement).filter(
-        models.Settlement.id == participant.settlement_id
+        models.Settlement.id == settlement_id
     ).first()
 
     if not settlement:
@@ -388,26 +436,37 @@ def mark_participant_settled(db: Session, participant_id, current_user):
         models.SettlementParticipant.settlement_id == settlement.id
     ).all()
 
+    auto_completed = False
     if all_participants and all(p.status == "SETTLED" for p in all_participants):
         settlement.status = "COMPLETED"
+        auto_completed = True
 
     db.commit()
     db.refresh(participant)
 
+    if auto_completed:
+        create_notification(
+            db,
+            settlement.creator_id,
+            "SETTLEMENT_COMPLETED",
+            f"정산이 완료되었습니다 ({int(settlement.total_amount):,}원)",
+        )
+
     return participant
 
 
-def revert_participant(db: Session, participant_id, current_user):
+def revert_participant(db: Session, settlement_id, participant_id, current_user):
     """참여자 SETTLED → PENDING 복원. creator 또는 회원 참여자 본인이 호출 가능."""
     participant = db.query(models.SettlementParticipant).filter(
-        models.SettlementParticipant.id == participant_id
+        models.SettlementParticipant.id == participant_id,
+        models.SettlementParticipant.settlement_id == settlement_id,
     ).first()
 
     if not participant:
         return None
 
     settlement = db.query(models.Settlement).filter(
-        models.Settlement.id == participant.settlement_id
+        models.Settlement.id == settlement_id
     ).first()
 
     if not settlement:
@@ -517,10 +576,16 @@ def update_settlement(
 
 
 def delete_settlement(db: Session, settlement_id, current_user):
-    """정산 삭제. CASCADE로 참여자 자동 삭제."""
+    """정산 삭제. COMPLETED 정산은 차단 (revert 먼저). CASCADE로 참여자 자동 삭제."""
     settlement = _get_owned_settlement(db, settlement_id, current_user)
     if not settlement:
         return None
+
+    if settlement.status == "COMPLETED":
+        raise HTTPException(
+            status_code=400,
+            detail="완료된 정산은 삭제할 수 없습니다. revert 후 시도하세요",
+        )
 
     db.delete(settlement)
     db.commit()
@@ -529,7 +594,11 @@ def delete_settlement(db: Session, settlement_id, current_user):
 
 
 def cancel_settlement(db: Session, settlement_id, current_user):
-    """정산 취소. status를 CANCELLED로 변경 (기록 보존, 실부담액 계산에서 제외)."""
+    """정산 취소. status를 CANCELLED로 변경 + 모든 참여자 상태 초기화 (PENDING + settled_at NULL).
+
+    기록 보존, 실부담액 계산에서 제외.
+    COMPLETED 정산은 차단 (revert 먼저).
+    """
     settlement = _get_owned_settlement(db, settlement_id, current_user)
     if not settlement:
         return None
@@ -537,7 +606,22 @@ def cancel_settlement(db: Session, settlement_id, current_user):
     if settlement.status == "CANCELLED":
         return settlement
 
+    if settlement.status == "COMPLETED":
+        raise HTTPException(
+            status_code=400,
+            detail="완료된 정산은 취소할 수 없습니다. revert 후 시도하세요",
+        )
+
     settlement.status = "CANCELLED"
+
+    # 모든 참여자 상태 초기화 (PENDING + settled_at NULL)
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement_id
+    ).all()
+    for p in participants:
+        p.status = "PENDING"
+        p.settled_at = None
+
     db.commit()
     db.refresh(settlement)
 
