@@ -16,6 +16,10 @@ from app.notifications.service import create_notification
 from app.transactions.models import Transaction
 
 
+# 8번 피드백: 동일 set을 모듈 상단 상수로 추출
+PERSIST_STATES = {"IN_PROGRESS", "ACHIEVED", "EXPIRED", "CANCELLED"}
+
+
 def _goal_progress_subquery():
     """Goal.id 별 current_amount를 계산하는 correlated subquery."""
     return (
@@ -31,20 +35,33 @@ def _goal_progress_subquery():
     )
 
 
+def _to_goal_dto(goal: Goal, current_amount: float, computed_status: str) -> dict:
+    """10번 피드백: dynamic setattr 안티패턴을 피하기 위한 DTO(dict) 반환 조립 함수."""
+    target = float(goal.target_amount)
+    progress_percentage = round((current_amount / target * 100) if target > 0 else 0.0, 2)
+    remaining_amount = max(target - current_amount, 0)
+
+    return {
+        "id": goal.id,
+        "user_id": goal.user_id,
+        "name": goal.name,
+        "target_amount": target,
+        "target_date": goal.target_date,
+        "category_id": goal.category_id,
+        "description": goal.description,
+        "status": computed_status,
+        "created_at": goal.created_at,
+        "achieved_at": goal.achieved_at,
+        "current_amount": current_amount,
+        "progress_percentage": progress_percentage,
+        "remaining_amount": remaining_amount,
+    }
+
 
 def create_goal(
     db: Session, user_id: uuid.UUID, goal_data: GoalCreate
-) -> Goal | None:
-    """새로운 저축 목표를 생성한다.
-
-    Args:
-        db: 데이터베이스 세션.
-        user_id: 목표 소유자 ID.
-        goal_data: 생성 요청 데이터.
-
-    Returns:
-        생성된 Goal 객체. 카테고리 검증 실패 시 None.
-    """
+) -> dict | None:
+    """새로운 저축 목표를 생성한다."""
     category = (
         db.query(Category)
         .filter(
@@ -63,22 +80,24 @@ def create_goal(
         target_date=goal_data.target_date,
         category_id=goal_data.category_id,
         description=goal_data.description,
+        status="IN_PROGRESS",
     )
 
     db.add(new_goal)
     db.commit()
+    db.refresh(new_goal)
 
-    return get_goal_by_id(db, new_goal.id, user_id)
+    current_amount = 0.0
+    computed_status = determine_status(new_goal, current_amount)
+
+    # 6번 피드백: get_goal_by_id 중복 SELECT 제거하고 즉시 DTO 반환
+    return _to_goal_dto(new_goal, current_amount, computed_status)
 
 
 def get_goals(
     db: Session, user_id: uuid.UUID, status: str | None = None
-) -> list[Goal]:
-    """사용자의 저축 목표를 최신순으로 조회한다.
-
-    N+1 문제를 방지하기 위해 _goal_progress_subquery()를 활용해 일괄 조회하며,
-    계산된 최종 상태(computed status) 기준으로 필터링을 수행합니다.
-    """
+) -> list[dict]:
+    """사용자의 저축 목표를 최신순으로 조회한다."""
     progress_subq = _goal_progress_subquery()
     query = (
         db.query(Goal, progress_subq.label("current_amount"))
@@ -92,37 +111,28 @@ def get_goals(
         current_amount = float(cur_amt or 0)
         computed_status = determine_status(goal, current_amount)
 
-        # G3: DB 저장 차단 (computed_status가 ON_TRACK/BEHIND면 goal.status에 쓰지 않고,
-        # PERSIST_STATES에 포함된 경우에만 동기화)
-        PERSIST_STATES = {"IN_PROGRESS", "ACHIEVED", "EXPIRED", "CANCELLED"}
         if computed_status in PERSIST_STATES and goal.status != computed_status:
             goal.status = computed_status
             if computed_status == "ACHIEVED" and not goal.achieved_at:
                 goal.achieved_at = datetime.utcnow()
-            elif computed_status == "IN_PROGRESS":
-                goal.achieved_at = None
+            # 9번 피드백: target_amount > 0 이 보장되므로 IN_PROGRESS 분기는 dead branch 삭제
             db.commit()
+            db.refresh(goal)  # 7번 피드백: get_goal_by_id/get_goal_progress와 일치하도록 refresh 추가
 
-        # 동적 속성 탑재 (GoalResponse 매핑용)
-        goal.current_amount = current_amount
-        target = float(goal.target_amount)
-        goal.progress_percentage = round((current_amount / target * 100) if target > 0 else 0.0, 2)
-        goal.remaining_amount = max(target - current_amount, 0)
-        goal.computed_status = computed_status
+        dto = _to_goal_dto(goal, current_amount, computed_status)
 
-        # G5: 계산된 status 기준으로 필터링
         if status:
             if computed_status == status:
-                goals_list.append(goal)
+                goals_list.append(dto)
         else:
-            goals_list.append(goal)
+            goals_list.append(dto)
 
     return goals_list
 
 
 def get_goal_by_id(
     db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
-) -> Goal | None:
+) -> dict | None:
     """특정 저축 목표를 조회하며 진행률 및 계산된 필드들을 포함시킵니다."""
     progress_subq = _goal_progress_subquery()
     result = (
@@ -137,22 +147,15 @@ def get_goal_by_id(
     current_amount = float(cur_amt or 0)
     computed_status = determine_status(goal, current_amount)
 
-    PERSIST_STATES = {"IN_PROGRESS", "ACHIEVED", "EXPIRED", "CANCELLED"}
     if computed_status in PERSIST_STATES and goal.status != computed_status:
         goal.status = computed_status
         if computed_status == "ACHIEVED" and not goal.achieved_at:
             goal.achieved_at = datetime.utcnow()
-        elif computed_status == "IN_PROGRESS":
-            goal.achieved_at = None
+        # 9번 피드백: dead branch 제거
         db.commit()
+        db.refresh(goal)  # 7번 피드백: db.refresh() 보강하여 일관성 유지
 
-    goal.current_amount = current_amount
-    target = float(goal.target_amount)
-    goal.progress_percentage = round((current_amount / target * 100) if target > 0 else 0.0, 2)
-    goal.remaining_amount = max(target - current_amount, 0)
-    goal.computed_status = computed_status
-
-    return goal
+    return _to_goal_dto(goal, current_amount, computed_status)
 
 
 def update_goal(
@@ -160,11 +163,8 @@ def update_goal(
     goal_id: uuid.UUID,
     user_id: uuid.UUID,
     goal_update: GoalUpdate,
-) -> Goal | None:
-    """저축 목표 정보를 부분 수정한다.
-
-    category_id 변경 시 새 카테고리의 소유권을 검증한다.
-    """
+) -> dict | None:
+    """저축 목표 정보를 부분 수정한다."""
     goal = (
         db.query(Goal)
         .filter(Goal.id == goal_id, Goal.user_id == user_id)
@@ -189,28 +189,71 @@ def update_goal(
 
     if goal_update.name is not None:
         goal.name = goal_update.name
+
+    amount_changed = False
+    date_changed = False
+
     if goal_update.target_amount is not None:
-        goal.target_amount = goal_update.target_amount
+        if float(goal.target_amount) != float(goal_update.target_amount):
+            goal.target_amount = goal_update.target_amount
+            amount_changed = True
+
     if goal_update.target_date is not None:
-        goal.target_date = goal_update.target_date
+        if goal.target_date != goal_update.target_date:
+            goal.target_date = goal_update.target_date
+            date_changed = True
+
     if goal_update.description is not None:
         goal.description = goal_update.description
 
     db.commit()
+    db.refresh(goal)
 
-    return get_goal_by_id(db, goal_id, user_id)
+    # 4번 피드백: target_amount 또는 target_date 변경 시 flag reset 및 status 재계산 추가
+    current_amount = calculate_progress(db, goal)
+
+    if amount_changed or date_changed:
+        target = float(goal.target_amount)
+        if target > 0:
+            ratio = current_amount / target
+
+            # (a) target_amount 변경 시 진행 비율 하락에 맞춰 마일스톤 플래그 리셋
+            goal.is_25_notified = ratio >= 0.25
+            goal.is_50_notified = ratio >= 0.50
+            goal.is_75_notified = ratio >= 0.75
+
+            if ratio >= 1.0:
+                if not goal.is_achieved_notified:
+                    goal.status = "ACHIEVED"
+                    goal.achieved_at = datetime.utcnow()
+                    goal.is_achieved_notified = True
+            else:
+                if goal.is_achieved_notified:
+                    goal.status = "IN_PROGRESS"
+                    goal.achieved_at = None
+                    goal.is_achieved_notified = False
+
+        # (b) target_date 변경 시 status 재평가 (EXPIRED 상태 연장/복구 등 대응)
+        computed_status = determine_status(goal, current_amount)
+        if computed_status in PERSIST_STATES and goal.status != computed_status:
+            goal.status = computed_status
+            if computed_status == "ACHIEVED" and not goal.achieved_at:
+                goal.achieved_at = datetime.utcnow()
+            elif computed_status != "ACHIEVED":
+                goal.achieved_at = None
+
+        db.commit()
+        db.refresh(goal)
+
+    current_amount = calculate_progress(db, goal)
+    computed_status = determine_status(goal, current_amount)
+
+    # 6번 피드백: get_goal_by_id 중복 SELECT 호출 없이 DTO 즉시 반환
+    return _to_goal_dto(goal, current_amount, computed_status)
 
 
 def calculate_progress(db: Session, goal: Goal) -> float:
-    """연결 카테고리의 EXPENSE 거래 합계로 현재 누적 저축액을 계산한다.
-
-    Args:
-        db: 데이터베이스 세션.
-        goal: 저축 목표 객체.
-
-    Returns:
-        목표 생성 후 누적된 EXPENSE 거래 합계.
-    """
+    """연결 카테고리의 EXPENSE 거래 합계로 현재 누적 저축액을 계산한다."""
     total = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
         .filter(
@@ -225,15 +268,7 @@ def calculate_progress(db: Session, goal: Goal) -> float:
 
 
 def determine_status(goal: Goal, current_amount: float) -> str:
-    """진행률과 시간 경과율을 비교하여 목표 상태를 판정한다.
-
-    상태:
-      - ACHIEVED: 진행률 100% 이상
-      - EXPIRED: 달성일 경과 + 미달성
-      - ON_TRACK: 시간 경과율 ≤ 진행률 (계획대로 진행 중)
-      - BEHIND: 시간 경과율 > 진행률 (뒤처짐)
-    CANCELLED 상태는 그대로 유지한다.
-    """
+    """진행률과 시간 경과율을 비교하여 목표 상태를 판정한다."""
     if goal.status == "CANCELLED":
         return "CANCELLED"
 
@@ -288,12 +323,12 @@ def get_goal_progress(
     )
     status = determine_status(goal, current_amount)
 
-    PERSIST_STATES = {"IN_PROGRESS", "ACHIEVED", "EXPIRED", "CANCELLED"}
     if status in PERSIST_STATES and goal.status != status:
         goal.status = status
         if status == "ACHIEVED" and not goal.achieved_at:
             goal.achieved_at = datetime.utcnow()
         elif status == "IN_PROGRESS":
+            # get_goal_progress는 외부 노출용이므로 status는 유지하되 internal state sync용
             goal.achieved_at = None
         db.commit()
         db.refresh(goal)
@@ -337,11 +372,7 @@ def get_contributing_transactions(
 def forecast_completion(
     db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
 ) -> dict | None:
-    """현재까지의 저축 페이스로 목표 달성 예상일을 예측한다.
-
-    일평균 저축액 = 현재 누적 / 경과 일수
-    예상 달성일 = 오늘 + (남은 금액 / 일평균)
-    """
+    """현재까지의 저축 페이스로 목표 달성 예상일을 예측한다."""
     progress_subq = _goal_progress_subquery()
     result = (
         db.query(Goal, progress_subq.label("current_amount"))
@@ -387,10 +418,7 @@ def forecast_completion(
 def get_monthly_trend(
     db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
 ) -> list[dict] | None:
-    """저축 목표의 월별 저축액 추이를 시간순으로 조회한다.
-
-    연결 카테고리의 EXPENSE 거래를 month 단위로 집계.
-    """
+    """저축 목표의 월별 저축액 추이를 시간순으로 조회한다."""
     goal = (
         db.query(Goal)
         .filter(Goal.id == goal_id, Goal.user_id == user_id)
@@ -427,7 +455,7 @@ def check_and_notify_goal_achievement(
     db: Session, user_id: uuid.UUID, category_id: uuid.UUID
 ) -> None:
     """거래 생성/수정/삭제 시 호출되어 해당 카테고리에 연결된 목표의 진행 상태를 확인하고,
-    마일스톤(25%, 50%, 75%) 및 최종 달성(100%) 알림을 처리하고 상태를 갱신합니다.
+    마일스톤 및 최종 달성 알림을 처리하고 상태를 갱신합니다.
     """
     progress_subq = _goal_progress_subquery()
     goals_with_progress = (
@@ -448,7 +476,6 @@ def check_and_notify_goal_achievement(
 
         ratio = current_amount / target
 
-        # 25%, 50%, 75% 마일스톤 검증
         for threshold, flag in [
             (0.25, "is_25_notified"),
             (0.5, "is_50_notified"),
@@ -465,11 +492,9 @@ def check_and_notify_goal_achievement(
                         f"{goal.name} 목표 {pct}% 달성!",
                     )
             else:
-                # 임계값 아래로 떨어지면 플래그 리셋 (재발화 가능)
                 if getattr(goal, flag):
                     setattr(goal, flag, False)
 
-        # 100% 최종 달성 검증
         if ratio >= 1.0:
             if not goal.is_achieved_notified:
                 goal.status = "ACHIEVED"
@@ -482,7 +507,6 @@ def check_and_notify_goal_achievement(
                     f"🎉 목표 달성! {goal.name}",
                 )
         else:
-            # 100% 아래로 떨어진 경우 상태 복구 및 플래그 리셋
             if goal.is_achieved_notified:
                 goal.status = "IN_PROGRESS"
                 goal.achieved_at = None
@@ -493,11 +517,8 @@ def check_and_notify_goal_achievement(
 
 def cancel_goal(
     db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
-) -> Goal | None:
-    """진행 중인 저축 목표를 취소 상태(CANCELLED)로 변경한다.
-
-    삭제와 달리 기록은 보존되며, 이미 ACHIEVED/EXPIRED/CANCELLED 상태인 경우 None을 반환.
-    """
+) -> dict | None:
+    """진행 중인 저축 목표를 취소 상태(CANCELLED)로 변경한다."""
     goal = (
         db.query(Goal)
         .filter(Goal.id == goal_id, Goal.user_id == user_id)
@@ -512,11 +533,16 @@ def cancel_goal(
 
     goal.status = "CANCELLED"
     db.commit()
+    db.refresh(goal)
 
-    return get_goal_by_id(db, goal_id, user_id)
+    current_amount = calculate_progress(db, goal)
+    computed_status = determine_status(goal, current_amount)
+
+    # 6번 피드백 반영
+    return _to_goal_dto(goal, current_amount, computed_status)
 
 
-def delete_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> Goal | None:
+def delete_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> dict | None:
     """저축 목표를 영구 삭제한다."""
     goal = (
         db.query(Goal)
@@ -527,7 +553,12 @@ def delete_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> Goal | N
     if not goal:
         return None
 
+    # 반환할 최종 데이터 구성
+    current_amount = calculate_progress(db, goal)
+    computed_status = determine_status(goal, current_amount)
+    dto = _to_goal_dto(goal, current_amount, computed_status)
+
     db.delete(goal)
     db.commit()
 
-    return goal
+    return dto

@@ -5,13 +5,6 @@ Revises: 3912d4fcce75
 Create Date: 2026-05-28 12:36:34.869630
 
 """
-from typing import Sequence, Union
-
-from alembic import op
-import sqlalchemy as sa
-
-
-# revision identifiers, used by Alembic.
 """add_milestone_flags_to_goals
 
 Revision ID: 11f31d77710f

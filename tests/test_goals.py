@@ -176,7 +176,7 @@ def test_goal_border_day_status(auth_client, test_user, test_category, db):
         target_date=date.today(),
         category_id=test_category.id,
         status="IN_PROGRESS",
-        created_at=datetime.utcnow() - timedelta(days=5) # 5일 전에 만듦
+        created_at=datetime.utcnow() # 오늘 만듦 (total_days = 0)
     )
     db.add(goal)
     db.commit()
