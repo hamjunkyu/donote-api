@@ -42,7 +42,10 @@ def create_transaction(
     db.commit()
     db.refresh(db_transaction)
 
-    return db_transaction
+    return {
+    **db_transaction.__dict__,
+    "category_name": category.name
+}
 
 
 def get_transactions(db: Session, current_user):
@@ -105,6 +108,8 @@ def update_transaction(
         return None
 
     old_amount = transaction.amount
+    old_type = transaction.type
+    old_category_id = transaction.category_id
 
     if transaction_update.category_id is not None:
         category = db.query(category_models.Category).filter(
@@ -143,8 +148,9 @@ def update_transaction(
     db.commit()
 
     settlement = db.query(settlement_models.Settlement).filter(
-        settlement_models.Settlement.transaction_id == transaction.id
-    ).first()
+    settlement_models.Settlement.transaction_id == transaction.id,
+    settlement_models.Settlement.status != "CANCELLED"
+).first()
 
     if settlement and old_amount != transaction.amount:
         settlement.total_amount = transaction.amount
@@ -172,7 +178,14 @@ def update_transaction(
 
     db.refresh(transaction)
 
-    return transaction
+    category = db.query(category_models.Category).filter(
+        category_models.Category.id == transaction.category_id
+    ).first()
+
+    return {
+        **transaction.__dict__,
+        "category_name": category.name 
+    }
 
 
 def delete_transaction(db: Session, transaction_id, current_user):

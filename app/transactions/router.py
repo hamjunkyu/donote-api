@@ -46,7 +46,7 @@ def get_transaction(
     if not transaction:
         raise HTTPException(
             status_code=404,
-            detail="Transaction not found"
+            detail="거래를 찾을 수 없습니다"
         )
 
     return transaction
@@ -69,7 +69,7 @@ def update_transaction(
     if not transaction:
         raise HTTPException(
             status_code=404,
-            detail="Transaction not found"
+            detail="거래를 찾을 수 없습니다"
         )
 
     return transaction
@@ -90,7 +90,7 @@ def delete_transaction(
     if not transaction:
         raise HTTPException(
             status_code=404,
-            detail="Transaction not found"
+            detail="거래를 찾을 수 없습니다"
         )
 
     return {
