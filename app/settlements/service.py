@@ -628,6 +628,61 @@ def cancel_settlement(db: Session, settlement_id, current_user):
     return settlement
 
 
+def get_active_settlement_by_transaction(db: Session, transaction_id):
+    """거래에 연결된 비-CANCELLED 정산 조회 (없으면 None)."""
+    return db.query(models.Settlement).filter(
+        models.Settlement.transaction_id == transaction_id,
+        models.Settlement.status != "CANCELLED",
+    ).first()
+
+
+def update_settlement_total(db: Session, transaction_id, new_amount: int) -> None:
+    """거래 amount 변경 시 연결된 정산의 total + 참여자 amount 재분배.
+
+    CANCELLED 정산은 무시. COMPLETED 정산은 차단 (revert 먼저).
+    SETTLED 참여자 amount는 유지 (송금 완료 사실 보존).
+    EQUAL: 미정산 참여자 + creator 가 잔여 금액 균등 재분배.
+    CUSTOM: 미정산 참여자 amount 0으로 초기화 (사용자 재입력 필요).
+    재분배 후 creator 몫 < 0 이면 400.
+    """
+    settlement = get_active_settlement_by_transaction(db, transaction_id)
+    if not settlement:
+        return
+
+    if settlement.status == "COMPLETED":
+        raise HTTPException(
+            status_code=400,
+            detail="완료된 정산이 연결된 거래는 금액을 변경할 수 없습니다. revert 후 시도하세요",
+        )
+
+    settlement.total_amount = new_amount
+
+    participants = db.query(models.SettlementParticipant).filter(
+        models.SettlementParticipant.settlement_id == settlement.id
+    ).all()
+
+    if settlement.split_type == "EQUAL":
+        settled_total = sum(int(p.amount) for p in participants if p.status == "SETTLED")
+        non_settled = [p for p in participants if p.status != "SETTLED"]
+        remaining_pool = new_amount - settled_total
+        if remaining_pool < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="이미 정산된 금액보다 작게 변경할 수 없습니다",
+            )
+        n_remaining = len(non_settled) + 1  # creator 포함
+        per_person = remaining_pool // n_remaining
+        for p in non_settled:
+            p.amount = per_person
+    else:  # CUSTOM
+        for p in participants:
+            if p.status != "SETTLED":
+                p.amount = 0
+
+    db.flush()
+    _validate_creator_share(db, settlement.id)
+
+
 def get_user_settlements(db: Session, current_user, role: Optional[str] = None):
     """사용자 정산 목록 조회.
 

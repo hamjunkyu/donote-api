@@ -2,10 +2,13 @@
 
 > 중간 발표(2026-05-14) 이후 코드 정리 및 spec 위반 픽스 작업. 백엔드 완성 → 프론트엔드 일괄 동기화 순서.
 
-## 📌 진행 상황 (2026-05-28 기준)
+## 📌 진행 상황 (2026-05-30 기준)
 
-- **PR1 함준규 Settlement** — ✅ 머지됨 (commit 37ebbe3)
-- **PR2 김동준 Goals 통합 (PR #20)** — 리뷰 중 (16개 코멘트 + 머지 차단 4개)
+- **PR1 함준규 Settlement** — ✅ 머지됨 (#19)
+- **PR-S2 함준규 dependencies.py 삭제** — ✅ 머지됨
+- **PR2 김동준 Goals 통합 (#20)** — ✅ 머지됨 (리뷰 16개 반영 완료)
+- **PR-S1 함준규 Settlement 통합 fix (#21)** — ✅ 머지됨 (pagination 1개만 PR11 후속으로 잔존)
+- **머지 완료**: 16개 PR 중 4개 (PR1/PR-S2/PR2/PR-S1). 잔여 12개
 - **14차 전체 코드 review 완료** — 179개 발견 → REAL 75 + PARTIAL 50 + INTENTIONAL 10 + DEFER 44
 - **실질 작업 대상**: REAL 75 + PARTIAL 우선순위 높은 것 ~20 = 약 95개를 14개 PR + 신규 PR-S1/PR-S2 (총 16개) 에 분배
 
@@ -29,33 +32,33 @@
 
 ## 📋 전체 개요
 
-- **기간**: ~1주 (각자 ~2.5~4.5일)
+- **기간**: ~1주 (각자 ~2.5~4.5일). 머지 완료 4개 제외 잔여 12개 PR.
 - **목표**: spec 위반 픽스 + 버그 픽스 + 확장 기능 (마일스톤/페이지네이션/Export) + 아키텍처 정리 + 179개 발견 사항 흡수
 - **워크플로우**: Issue 생략. 브랜치 → 코드 → PR → 리뷰 → 머지
 - **브랜치 명명**: `feature/도메인-설명` 또는 `fix/도메인-설명`
 
 ## 🎯 작업 분배 요약 (업데이트)
 
-| 담당 | PR | 시간 | 영역 |
+| 담당 | PR | 잔여 시간 | 영역 |
 |---|---|---|---|
-| **함준규** | PR1 ✅ / PR-S1 / PR-S2 / PR10 / PR14 / PR16 | ~4.5일 | Settlement + 공유 헬퍼 + 트랜잭션 경계 + 아키텍처 + 신규 fix |
-| **김동준** | PR2 (진행 중) / PR4 / PR11 | ~3일 | Goals + Budget + Pagination/필터 |
+| **함준규** | PR1 ✅ / PR-S2 ✅ / PR-S1 ✅ / PR10 / PR14 / PR16 | ~2일 | Settlement(완료) + 공유 헬퍼 + 트랜잭션 경계 + 아키텍처 |
+| **김동준** | PR2 ✅ / PR4 / PR11 | ~2일 | Goals(완료) + Budget + Pagination/필터 |
 | **베키** | PR3 / PR12 / PR13 / PR15 | ~3일 | Transactions + Export + API 일관성 + DB constraint 보강 |
 | **김민수** | PR5 / PR6 / PR7 / PR8 / PR9 | ~3일 | CSV (대폭 추가) + Auth + Categories + Notifications + migration |
 
 ## 🔗 PR 의존성
 
-- **PR1 함준규** (✅ 머지) → **PR2 김동준** (진행 중)
-- **PR2 머지** → **PR-S1 함준규** (Settlement 잔여 fix) + **PR3 베키** (Transactions) 병렬 시작
-- **PR-S2 함준규** (dependencies.py 삭제, 5분) — 누구나 가능, 즉시
+- **PR1 함준규** ✅ / **PR-S2 함준규** ✅ / **PR2 김동준** ✅ / **PR-S1 함준규** ✅ — 모두 머지 완료
 - **PR3 베키** → **PR4 김동준**, **PR11 김동준**, **PR12 베키** 의존
-- **PR-S1 + PR3** → **PR10 함준규** (Option B+, actual_amount 노출) 의존
+- **PR3 머지** → **PR10 함준규** (Option B+, actual_amount 노출) 시작 가능 (PR-S1은 이미 머지됨)
 - **PR10** → **PR14 함준규** (트랜잭션 경계) 의존
 - 마지막: **PR13 API 일관성** (베키) — 모든 도메인 PR 머지 후
 - 마지막: **PR15 DB constraint 보강** (베키) — 마이그레이션 보강 같이
 - 최종 마무리: **PR16 Eager loading + 도메인 예외 + spec doc 보강** (함준규)
 - 최종: **pytest 통합 테스트** — 각자 본인 도메인
 - 정말 마지막: **frontend 일괄 동기화** (함준규)
+
+> **현재 병목**: PR3(베키)가 PR4/PR10/PR11/PR12 4개의 선행. PR3·PR5 착수가 전체 일정을 결정.
 
 ---
 
@@ -100,17 +103,16 @@
 
 ### 🆕 신규 결정 사항 (2026-05-28 추가, 7개)
 
-#### 18. PATCH path RESTful 통일 (PR-S1)
-- 현재: `PATCH /api/settlements/participants/{pid}/settle` (settlement_id 없음)
-- 변경: **`PATCH /api/settlements/{sid}/participants/{pid}/settle`**
-- 근거: spec 6.3 ② 입력 명세 일치 + Swagger 그룹핑 + 권한 검증 단순화 (역추적 불필요)
-- `revert` endpoint 동일 적용 (`PATCH /api/settlements/{sid}/participants/{pid}/revert`)
+#### 18. PATCH path RESTful 통일 (PR-S1) — ✅ 구현 완료
+- 변경 완료: **`PATCH /api/settlements/{sid}/participants/{pid}/settle`** + `/revert`
+- service 시그니처에 settlement_id 추가로 권한 검증 단순화
+- 근거: spec 6.3 ② 입력 명세 일치 + Swagger 그룹핑 + 권한 검증 단순화
 
-#### 19. SETTLEMENT_COMPLETED 알림 추가 (PR-S1)
+#### 19. SETTLEMENT_COMPLETED 알림 추가 — emit ✅ 완료 (PR-S1) / Enum PR8
 - spec 9.3 에는 없지만 PROJECT_DEFINITION 2.2 "정산 요청·완료" 명시
-- 자동 COMPLETED 시 (마지막 참여자 SETTLED) creator에게 알림 발생
-- 메시지 예: "OO님과의 정산이 완료되었습니다 ({total_amount:,}원)"
-- frontend 표시는 PR8 김민수 (NotificationType Enum) + 마지막 frontend 동기화
+- emit (PR-S1 완료): 자동 COMPLETED(`mark_participant_settled`) + 수동 COMPLETED(`mark_settlement_complete`) 양쪽에서 creator에게 발화
+- 실제 메시지: "정산이 완료되었습니다 ({total_amount:,}원)"
+- NotificationType Enum 추가: PR8 김민수 / frontend 표시: 마지막 동기화
 - spec 9.3 doc 보강 (PR16)
 
 #### 20. transaction_date 미래 허용 (코드 변경 없음)
@@ -130,13 +132,14 @@
 - 적용 endpoint:
   - `GET /api/transactions` — PR11 김동준 (메인 작업)
   - `GET /api/goals/` + `GET /api/goals/{id}/transactions` — PR11 김동준 (같은 PR 흡수)
-  - `GET /api/settlements/` — PR-S1 함준규
+  - `GET /api/settlements/` — **PR11 후속** (PR-S1에서는 PaginatedResponse 미정립이라 제외. PR11 머지 후 함준규가 별도 follow-up commit으로 적용)
   - `GET /api/notifications` — PR8 김민수
 - 적용 안 함: `GET /api/categories` (보통 30개 미만), `GET /api/budgets/{ym}` (월별 16개 미만)
 
 #### 23. `/auth` prefix `/api/auth/` 통일
 - 기존 spec 1.3 `/auth/login` → 결정에 따라 `/api/auth/login`
 - API 일관성 + gateway/proxy 설정 단순
+- PR-S1이 추가한 사용자 검색 endpoint 최종 경로: **`/api/auth/users/search`** (prefix 변경 후 자동 이동. 인증 컨텍스트 사용자 조회라 auth 하위가 자연스러움)
 - spec 1.3 doc 업데이트 (PR16)
 - PR13에서 prefix 변경
 
@@ -156,27 +159,23 @@ PR1 본문은 기존 그대로 (참고용). 새 발견은 PR-S1으로 후속 처
 
 ---
 
-### 🆕 PR-S2: dependencies.py 삭제 (5분, 즉시)
+### 🆕 PR-S2: dependencies.py 삭제 ✅ 머지됨
 
-**Critical 보안**: `app/dependencies.py` 에 인증 우회 MockUser 가 dead code로 존재. 어디서도 import 안 되지만 오타로 `from app.dependencies import get_current_user` 시 **인증 전체 우회**.
-
-**작업 항목**:
-- [ ] `app/dependencies.py` 삭제
-- [ ] `CONTRIBUTING.md:133` "dependencies.py - auth에만 존재" 거짓 표기 수정 ("auth/dependencies.py 만 존재" 로 변경)
-
-**검증**: grep으로 `from app.dependencies import` 0건 확인 (이미 0건). 삭제 후 서버 정상 동작.
-
-📂 **참조 파일**: `app/dependencies.py`, `CONTRIBUTING.md:133`
+인증 우회 MockUser dead code (`app/dependencies.py`) 삭제 완료. 삭제로 CONTRIBUTING.md:133 "auth에만 존재" 표기가 자동으로 진실이 됨.
 
 ---
 
-### 🆕 PR-S1: Settlement 통합 fix (1일, PR2 김동준 머지 후)
+### 🆕 PR-S1: Settlement 통합 fix ✅ 머지됨 (#21)
 
-**목표**: PR1 머지 후 발견된 Settlement 도메인의 spec 미준수 + drift + 잔여 fix를 한 PR로 정리.
+PR1 머지 후 발견된 Settlement 잔여 fix 12개 처리 완료. 적용 결정: 3, 5, 18, 19.
 
-**핵심 결정사항 적용**: 결정 3, 5, 18, 19, 22
+**머지된 내용**: Numeric drift(모델 12,0) / cancel 시 참여자 PENDING reset + COMPLETED 가드 / split_equal `fixed_participant_ids` 재분배 / CustomSplitItem gt=0 / calculate_debts PENDING-only + CANCELLED 가드 / get_balance CANCELLED 가드 / delete·cancel COMPLETED 가드 / SETTLEMENT_COMPLETED 알림(자동+수동) / add_participant amount=0 메시지 분기 / `_validate_creator_share` 헬퍼 통일 / PATH RESTful(`/{sid}/participants/{pid}/settle|revert`) / 이메일 검색 `GET /auth/users/search` (PR13 prefix 변경 후 `/api/auth/users/search`).
 
-**작업 항목**:
+**잔여 1개 (PR11 후속)**: `GET /api/settlements/` pagination — PR11의 `PaginatedResponse` 정립 후 함준규 follow-up.
+
+> 아래 원본 작업 항목/힌트/시나리오는 참고용 (전부 머지 완료, pagination 제외).
+
+<details><summary>원본 작업 항목 (참고용)</summary>
 
 #### Numeric drift 모델 수정
 - [ ] `app/settlements/models.py:29` Settlement.total_amount `Numeric(12,2)` → `Numeric(12,0)`
@@ -278,6 +277,8 @@ def cancel_settlement(...):
 - `app/settlements/` 전체
 - `app/notifications/service.py` — SETTLEMENT_COMPLETED 알림
 - `app/auth/service.py` 또는 `app/auth/router.py` — 이메일 검색 endpoint
+
+</details>
 
 ---
 
@@ -518,15 +519,13 @@ db.commit()  # 마지막에 한 번만
 - [ ] **🆕 settlements/service.py 문자열 sentinel 3곳** ("NOT_ALL_SETTLED", "NOT_COMPLETED", "NOT_SETTLED") → 도메인 예외로 교체
 - [ ] **🆕 categories/service.py:86 raise ValueError("CATEGORY_IN_USE")** → CategoryInUseError 도메인 예외
 - [ ] **🆕 "정산을 찾을 수 없습니다" 13곳 중복** → 상수 또는 SettlementNotFoundError 도메인 예외
-- [ ] **🆕 PR2 김동준 follow-up (PR2 머지 후 미해결분)**:
-  - `goals/service.py:delete_goal` deleted 객체 반환 → bool
-  - `goals/service.py:determine_status` target<=0 dead branch 정리
-  - `get_goals` elif IN_PROGRESS dead branch 정리
-  - **PR #20 머지 후 minor follow-up (2026-05-29 발견)**:
-    - `alembic/versions/11f31d77710f_add_milestone_flags_to_goals.py:8-14` 두 번째 docstring 블록 삭제 (첫 번째 fix 누락, 동작 OK이지만 코드 깔끔)
-    - `app/goals/service.py:get_goal_progress` 라인 327-329 `elif IN_PROGRESS` dead branch 삭제 (다른 함수 정리 시 누락. `target_amount > 0` 보호로 도달 불가)
-    - `app/goals/service.py:update_goal` 라인 ~215, ~244 `calculate_progress` 두 번 호출 → 한 번으로 통일
-    - `tests/conftest.py:setup_db` teardown `Base.metadata.drop_all` → `alembic_version` 안 지워져 다음 세션 alembic이 "already at head" 인식 가능. `DROP DATABASE` + `CREATE DATABASE` 또는 `alembic downgrade base` 패턴으로 변경
+- [ ] **🆕 goals 도메인 잔여 정리 (PR2 머지 후 검증, 전부 minor)**:
+  - `alembic/versions/11f31d77710f...:8-14` 두 번째 docstring 블록 삭제 (import 블록은 PR2에서 정리됨, docstring만 잔존)
+  - `app/goals/service.py:326-328` `get_goal_progress` 의 `elif IN_PROGRESS` dead branch 삭제 (`target_amount > 0` 보호로 도달 불가. get_goals/get_goal_by_id 쪽은 이미 제거됨)
+  - `app/goals/service.py:210, 245` `update_goal` 의 `calculate_progress` 중복 호출 → 한 번으로 통일
+  - `app/goals/service.py:determine_status` `target<=0` 분기 — 방어코드 유지/제거 결정 (스키마 gt=0 으로 입력 경로 도달 불가)
+  - `tests/conftest.py:56` teardown `Base.metadata.drop_all` → `alembic_version` 테이블 잔존으로 다음 세션 'already at head' 인식 가능. `DROP/CREATE DATABASE` 또는 `alembic downgrade base` 로 변경
+  - `tests/conftest.py:49` 함수 내 inline `import os` → 모듈 상단 이동 (PEP 8)
 - [ ] **🆕 service 시그니처 통일** — `current_user` 객체 vs `user_id` 만 받기 → 도메인별 일관성
 
 #### Spec doc 보강 (FEATURE_SPEC.md 업데이트)
@@ -535,6 +534,7 @@ db.commit()  # 마지막에 한 번만
 - [ ] spec 2.3 `transaction_date` "미래 허용 (예약 거래 대비)" 한 줄 추가
 - [ ] spec 6.3 ② `mark_participant_settled` path를 `/api/settlements/{sid}/participants/{pid}/settle` 로 명시
 - [ ] spec 6 에 `/api/settlements/{sid}/balance`, `/api/settlements/{sid}/debts`, `/api/settlements/{sid}/participants` endpoint 명시
+- [ ] spec 6.3 ① 이메일 검색 endpoint 경로 `/api/auth/users/search` 명시 (PR-S1 추가, PR13 prefix 변경 후 최종 경로)
 - [ ] spec 8.3 에 `/api/goals/{id}/transactions`, `/api/goals/{id}/forecast`, `/api/goals/{id}/monthly-trend` endpoint 명시 (없으면)
 - [ ] spec 9.3 `SETTLEMENT_COMPLETED` 알림 type 추가
 - [ ] CONTRIBUTING.md 섹션 번호 typo (## 7 두 개 → 7, 8 분리)
@@ -626,43 +626,27 @@ class GoalNotFound(NotFoundError):
 
 ---
 
-## 👤 김동준 (~3일)
+## 👤 김동준 (~2일)
 
-### PR2: Goals 통합 (PR #20 진행 중)
+### PR2: Goals 통합 ✅ 머지됨 (#20)
 
-**리뷰 코멘트 16개 받음** (2026-05-28 함준규). 머지 차단 4개 + 같은 PR fix 권장 2개 + follow-up 가능 7개 + skip 3개.
+리뷰 코멘트 16개 중 13개 반영 완료(머지 차단 4 + 권장 2 + follow-up 다수). 머지 후 검증으로 확인된 잔여 분은 PR16(함준규 마무리)로 이관.
 
-#### 머지 차단 (반드시 fix)
-- [ ] **1. `alembic/versions/11f31d77710f...:1-26`** 헤더 docstring + import 블록 통째 두 번 적힘. 두 번째 블록 삭제.
-- [ ] **2. `tests/conftest.py:11-15 setup_db`** — `settings.DATABASE_URL` (프로덕션 DB) 에 `create_all`. `TEST_DATABASE_URL` 분리 + alembic upgrade 패턴.
-- [ ] **3. `tests/conftest.py:22-37 db fixture`** — SAVEPOINT 패턴 누락. `connection.begin_nested()` + `after_transaction_end` listener 추가.
-- [ ] **7. `app/goals/service.py:update_goal`** —
-  - (a) `target_amount` 변경 시 `is_25/50/75_notified` flag reset
-  - (b) `target_date` 변경 시 status 재평가 (EXPIRED → 미래 연장 시 IN_PROGRESS 복귀)
+**반영 완료**: migration import 블록 정리 / conftest TEST_DATABASE_URL 분리 + SAVEPOINT / update_goal flag reset + status 재평가 / get_goals Query Literal / test_goal_border_day_status / dict DTO 리팩터(#6/#10/#12) / PERSIST_STATES 상수화(#9) / progress cap(#13) / GoalCreate Field max_length / 에러메시지 한글화 / get_goals dead branch 제거(#15) / conftest cleanup 중복 제거.
 
-#### 같은 PR fix 권장 (강력 권장)
-- [ ] **5. `app/goals/router.py:get_goals` Query**: `Literal["ACHIEVED","EXPIRED","CANCELLED","ON_TRACK","BEHIND"]` (IN_PROGRESS 제외) + docstring/동작 일치
-- [ ] **8. `tests/test_goals.py:test_goal_border_day_status`**: `target_date = created_at.date()` 로 변경해서 `total_days <= 0` 분기 실제 검증
+**잔여 → PR16 이관** (머지 후 발견, 전부 minor):
+- migration `11f31d77710f` 두 번째 docstring 블록(8-14행)만 잔존 — 삭제
+- `get_goal_progress` `elif IN_PROGRESS` dead branch (service.py:326-328) — 삭제
+- `update_goal` `calculate_progress` 두 번 호출 (service.py:210, 245) — 한 번으로 통일
+- `conftest.py:56` teardown `drop_all` → `alembic_version` 잔존 문제 → DROP/CREATE 또는 `alembic downgrade base`
+- `conftest.py:49` 함수 내 inline `import os` → 상단 이동
+- `determine_status` `target<=0` 분기 — 방어코드 유지/제거 결정 필요
 
-#### Follow-up commit 가능 (PR 안 또는 별도)
-- [ ] **6. create_goal/update_goal/cancel_goal commit 후 get_goal_by_id 재호출** — 헬퍼로 동적 속성 부착하는 방식 권장
-- [ ] **9. PERSIST_STATES 중복 3곳** (91/152/291) → 모듈 상수
-- [ ] **10. `_map_goal_response` 동적 setattr** → service에서 dict/dataclass 반환
-- [ ] **12. `get_goal_by_id` commit 후 refresh 없음** (get_goal_progress와 비일관)
-- [ ] **13. `progress_percentage` 상한 없음** → `min(100, ...)` 백엔드 캡
-- [ ] **15. `get_goals` elif IN_PROGRESS dead branch** 삭제
-- [ ] **16. tests/conftest.py imports 위치 (PEP 8) + cleanup 중복 (clear() vs pop())**
-
-#### Skip (DEFER)
-- ⏭️ **4. status SQL filter** — 목표 100개 미만이면 ms 차이. Python 후처리 OK.
-- ⏭️ **11. hysteresis 없음** — 24/25% 경계 거래 반복 시나리오 드뭄.
-- ⏭️ **14. get_monthly_trend 헬퍼 미적용** — 단건이라 동작 OK.
-
-#### 추가 (7차 발견)
-- [ ] **`app/goals/schemas.py:GoalCreate`** `name` max_length=100, `description` max_length=500 추가 (DB 일치)
-- [ ] Error message 영문 → 한글 통일 ("Goal not found" → "목표를 찾을 수 없습니다" 등 7곳)
+**Skip (DEFER, 미적용 의도적)**: #4 status SQL filter / #11 hysteresis / #14 get_monthly_trend 헬퍼.
 
 ---
+
+<details><summary>PR2 원본 본문 (참고용)</summary>
 
 ### PR2 (원본 본문): Goals 통합 (1일)
 
@@ -753,6 +737,8 @@ def _goal_progress_subquery():
 - `app/goals/` 전체
 - `app/notifications/service.py` — GOAL_MILESTONE / GOAL_ACHIEVED 알림 emit
 - `donote-frontend/src/pages/goals.js:112` — G2 픽스
+
+</details>
 
 ---
 
@@ -1121,11 +1107,11 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
   - categories: (별도 created_at/updated_at 없음 → PR7에서 추가 결정)
   - import_hashes.created_at
   - transactions.created_at/updated_at
-  - settlements.status (default 'PENDING'), created_at
+  - settlements.status (default 'PENDING'), created_at — ⚠️ **PR9 선행 필수**: enum 에 PENDING 값이 없어 PR9의 `RENAME VALUE 'IN_PROGRESS'→'PENDING'` 후에야 server_default 'PENDING' 적용 가능
   - settlement_participants.status (default 'PENDING')
   - budgets.is_warning_notified, is_exceeded_notified (default false)
   - notifications.is_read (default false), created_at
-  - goals 는 이미 server_default 있음 (3b1823b234e4)
+  - goals 는 이미 server_default 있음 (11f31d77710f milestone flags + 3b1823b234e4 is_achieved_notified)
   - 패턴: `op.alter_column('table', 'col', server_default=sa.text('CURRENT_TIMESTAMP'))` 또는 `sa.false()`
 
 #### 🆕 초기 마이그레이션 downgrade 순서 수정
@@ -1320,25 +1306,24 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
 - [ ] **만료 RefreshToken cleanup** — refresh 호출 시 또는 별도 cleanup endpoint 에서 expires_at < now() 인 토큰 삭제
   - 또는 단순히 refresh 시 expires_at 검증 (현재 JWT exp 검증만 함)
 
+> **결정 24**: deactivate 기능은 추가 안 함 (spec 없음). is_active 컬럼/endpoint/refresh is_active 체크 전부 제외.
+
 **구현 힌트**:
-- E-A1: `uuid.UUID(user_id_str)` 호출 시 `ValueError` / `TypeError` 발생 → 401 응답
-- refresh: db 에서 user 조회 후 `user.is_active` 확인 → 비활성이면 401
-- deactivate: `current_user.is_active = False`, `current_user.deactivated_at = datetime.utcnow()`, 모든 refresh token 무효화 (`delete_all_refresh_tokens` 호출)
+- E-A1: `dependencies.py:62` `uuid.UUID(user_id)` 호출 시 malformed value("abc" 등) → `ValueError` → 401 (현재 try/except 없어 500). None 가드는 이미 처리됨 — malformed value 만 대상.
+- refresh `payload.get("sub")` None 가드: `router.py` refresh 엔드포인트에서 `uuid.UUID(None)` → TypeError 500 방어 (get_current_user 경로는 이미 처리됨)
 
 **구현 시 함정**:
-- User 모델에 `is_active`, `deactivated_at` 컬럼 존재 확인 (없으면 마이그레이션 추가)
-- access token 은 deactivate 후에도 만료 전까진 동작 (30분). 즉시 차단 효과는 제한적
+- 비밀번호 max_length 미지정 시 긴 입력으로 bcrypt 비용 폭증 (DoS). `max_length=128` 으로 방어.
 
 **검증 시나리오**:
-1. 비활성 사용자 refresh token 시도 → 401
-2. 조작된 access token (잘못된 uuid 형식) → 401 (500 아님)
-3. `PATCH /auth/me/deactivate` 호출 → 응답 OK + user.is_active=False
-4. deactivate 후 refresh 시도 → 401
+1. 조작된 access token (잘못된 uuid 형식 "abc") → 401 (500 아님)
+2. refresh 시 sub=None 인 변조 토큰 → 401 (500 아님)
+3. 128자 초과 비밀번호 → 422
 
 📂 **참조 파일**:
 - `app/auth/` 전체
-- 특히 `app/auth/dependencies.py:62` — uuid 변환 위치
-- `app/auth/models.py` — User 모델 (is_active 컬럼 확인)
+- `app/auth/dependencies.py:62` — uuid 변환 위치 (E-A1)
+- `app/auth/router.py` refresh 엔드포인트 — sub None 가드
 
 ---
 
@@ -1460,14 +1445,17 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
 
 ---
 
-### PR9: settlement_status migration cleanup (30분)
+### PR9: settlement_status migration cleanup (30분) — 🔴 우선순위 격상 (fresh DB blocker)
 
 **목표**: 마이그레이션 파일의 enum 값 (`IN_PROGRESS`) 과 코드 (`PENDING`) 불일치 정리.
 
+**왜 blocker인가**: 초기 마이그레이션은 `settlement_status` enum 을 `('IN_PROGRESS','COMPLETED','CANCELLED')` 로 생성하는데, `PENDING` 을 추가/RENAME 하는 마이그레이션이 전혀 없음 (전체 versions 검색 0건). 모델/코드는 `PENDING` 사용 + default 도 `PENDING`. → **fresh DB 에 `alembic upgrade head` 후 정산 생성/조회 시 InvalidTextRepresentation 500**. 기존 dev DB 는 잠복(과거 create_all 등으로 PENDING 보유 추정). 운영/신규 환경 배포 전 반드시 선행.
+
 **작업 항목**:
-- [ ] 새 마이그레이션: `ALTER TYPE settlement_status RENAME VALUE 'IN_PROGRESS' TO 'PENDING'`
+- [ ] 새 마이그레이션: `ALTER TYPE settlement_status RENAME VALUE 'IN_PROGRESS' TO 'PENDING'` (RENAME 권장 — ADD VALUE 는 IN_PROGRESS dead value 잔존)
 - [ ] (선택) initial migration 파일 [3803b7878290:90](alembic/versions/3803b7878290_create_initial_tables.py#L90) 의 `IN_PROGRESS` → `PENDING` 도 함께 수정 (fresh install history correctness)
 - [ ] downgrade 도 작성
+- [ ] **PR15 연계**: PR15 의 'settlements.status server_default' 추가는 이 enum 수정 없이는 무효 (enum 에 PENDING 값 자체가 없음). PR9 → PR15 순서 또는 같은 마이그레이션 체인에서 처리
 
 **구현 힌트**:
 - `alembic revision -m "..."` 으로 새 파일 생성
@@ -1536,7 +1524,7 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
 - `failed` 카운트 추가 표시
 
 ### 사용자 검색 (PR-S1 신규)
-- 정산 참여자 추가 시 이메일 검색 UI — `GET /api/users/search?email=...`
+- 정산 참여자 추가 시 이메일 검색 UI — `GET /api/auth/users/search?email=...` (PR13 prefix 변경 후 경로)
 - 검색 결과로 user_id 자동 채움 + 비회원 모드 토글
 
 ## pytest 통합 테스트 (전원, ~2~3일)
@@ -1597,9 +1585,9 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
 ### E-A5. CSV import amount=0 행 (CSV 작업 시)
 **상황**: 결정대로 errors + skip.
 
-### F8. Settlement 모델 Numeric drift (PR-S1)
-**상황**: PR1 머지된 마이그레이션은 DB를 Numeric(12,0) 으로 변경했는데 모델은 Numeric(12,2) 그대로.
-**영향**: PR-S1 에서 모델만 수정 (마이그레이션 불필요). autogenerate 돌리면 의미 없는 diff 생성됨.
+### F8. Settlement 모델 Numeric drift (PR-S1) — ✅ 해결됨
+**상황**: PR1 머지된 마이그레이션은 DB를 Numeric(12,0) 으로 변경했는데 모델은 Numeric(12,2) 였음.
+**영향**: PR-S1 에서 모델을 Numeric(12,0) 으로 수정 완료. 더 이상 drift 없음.
 
 ### F9. CSV 한글 type 처리 누락 (PR5)
 **상황**: spec 7.2 예시는 "지출"/"수입" 한글인데 코드는 영문 그대로 사용 → 한글 CSV 업로드 시 모든 행 fail.
@@ -1609,9 +1597,9 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
 **상황**: `app/dependencies.py` 에 MockUser 항상 반환하는 dead code. 어디서도 import 안 되지만 오타로 `app.dependencies` (vs `app.auth.dependencies`) import 시 인증 전체 우회.
 **영향**: PR-S2 (5분) 로 파일 삭제. CONTRIBUTING.md:133 거짓 표기도 같이 수정.
 
-### F11. 초기 마이그레이션 drift (PR15)
-**상황**: 3803b7878290 에 server_default 누락, downgrade 순서 오류, enum DROP 누락.
-**영향**: 운영 가면 alembic upgrade/downgrade 깨짐. PR15 에서 보강.
+### F11. 초기 마이그레이션 drift (PR15 + PR9)
+**상황**: 3803b7878290 에 server_default 누락, downgrade 순서 오류, enum DROP 누락. + `settlement_status` enum 이 `IN_PROGRESS` 인데 코드는 `PENDING` (PENDING 추가 마이그레이션 0건).
+**영향**: fresh DB `alembic upgrade head` 후 정산 생성 시 enum 500 (🔴 PR9 blocker). 그 외 server_default/downgrade/enum DROP 은 PR15 보강.
 
 ### F12. Race condition 다수 (PR4, PR14, PR15)
 **상황**: add_participant 중복 row, upsert_budget 500, check_and_notify_* 중복 알림. 모두 application 체크만 있고 DB 보호 없음.
@@ -1619,25 +1607,23 @@ rows = db.query(Transaction, Category.name.label("category_name")).join(
 
 ---
 
-## 🎬 작업 시작 순서 (업데이트 2026-05-28)
+## 🎬 작업 시작 순서 (업데이트 2026-05-30)
 
-**현재 상태**: PR1 ✅ 머지됨, PR2 김동준 진행 중 (코멘트 16개 받음). 아래는 PR2 머지 가정 일정.
+**현재 상태**: PR1/PR-S2/PR2/PR-S1 ✅ 머지 완료. 베키 PR3 + 김민수 PR5 착수가 전체 일정 결정. 함준규/김동준은 PR3 머지 대기.
 
 | Day | 함준규 | 김동준 | 베키 | 김민수 |
 |---|---|---|---|---|
-| **Day 0 (지금)** | PR-S2 (5분, 즉시) | PR2 코멘트 처리 (머지 차단 4개 우선) | (대기) | (대기) |
-| **Day 1** | PR-S1 시작 (Settlement 통합 fix) | PR2 마무리 + 머지 | PR3 시작 | PR5 시작 |
-| **Day 2** | PR-S1 마무리 | PR4 시작 (PR3 후) | PR3 마무리 + PR12 시작 | PR5 마무리 + PR6 시작 |
-| **Day 3** | PR10 시작 (PR-S1+PR3 후) | PR4 마무리 + PR11 시작 | PR12 마무리 + PR15 시작 | PR6 마무리 + PR7 시작 |
+| **Day 1 (지금)** | (PR3 대기) | (PR3 대기) | **PR3 시작** | **PR5 시작** |
+| **Day 2** | (PR3 대기) | PR4 시작 (PR3 후) | PR3 마무리 + PR12 시작 | PR5 마무리 + PR6 시작 |
+| **Day 3** | PR10 시작 (PR3 후) | PR4 마무리 + PR11 시작 | PR12 마무리 + PR15 시작 | PR6 마무리 + PR7 시작 |
 | **Day 4** | PR10 마무리 + PR14 시작 | PR11 마무리 | PR15 마무리 + PR13 시작 | PR7 마무리 + PR8 시작 |
-| **Day 5** | PR14 마무리 + PR16 시작 | (pytest) | PR13 마무리 | PR8 마무리 + PR9 |
+| **Day 5** | PR14 마무리 + PR16 시작 | (pytest) | PR13 마무리 | PR8 마무리 + **PR9 (blocker)** |
 | **Week 2** | PR16 마무리 + 다이어그램 + frontend 동기화 | pytest | pytest | pytest |
 
 ### 핵심 의존성
-- **PR2 머지** → PR-S1 + PR3 + PR5 등 병렬 시작
-- **PR3 머지** → PR4, PR11, PR12 시작 가능
-- **PR-S1 + PR3 머지** → PR10 시작 가능
+- **PR3 머지** → PR4, PR10, PR11, PR12 시작 가능 (PR-S1 은 이미 머지됨)
 - **PR10 머지** → PR14 시작 가능
+- **PR9** (settlement_status enum) → PR15 의 settlements.status server_default 선행
 - **모든 도메인 PR 머지** → PR13 (API 일관성), PR15 (DB constraint), PR16 (마무리)
 
 ## 🛑 운영 전 체크리스트 (학기 평가 무관, 추후 작업)
