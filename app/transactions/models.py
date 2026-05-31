@@ -23,7 +23,7 @@ class Transaction(Base):
     type: Mapped[str] = mapped_column(
         SAEnum("INCOME", "EXPENSE", name="transaction_type"), nullable=False
     )
-    amount: Mapped[float] = mapped_column(Numeric(12, 0), nullable=False)
+    amount: Mapped[int] = mapped_column(Numeric(12, 0), nullable=False)
     category_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("categories.id"), nullable=False
     )

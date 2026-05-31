@@ -1,19 +1,20 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
+import uuid
 
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from . import schemas, service
-from typing import List
-
-from fastapi import HTTPException
-import uuid
 
 
-router = APIRouter(prefix="/transactions", tags=["Transactions"])
+router = APIRouter(
+    prefix="/api/transactions",
+    tags=["Transactions"]
+)
 
 
-@router.post("/", response_model=schemas.TransactionResponse)
+@router.post("", response_model=schemas.TransactionResponse)
 def create_transaction(
     transaction: schemas.TransactionCreate,
     db: Session = Depends(get_db),
@@ -22,7 +23,7 @@ def create_transaction(
     return service.create_transaction(db, transaction, current_user)
 
 
-@router.get("/", response_model=List[schemas.TransactionResponse])
+@router.get("", response_model=List[schemas.TransactionResponse])
 def get_transactions(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
@@ -36,10 +37,17 @@ def get_transaction(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    transaction = service.get_transaction_by_id(db, transaction_id, current_user)
+    transaction = service.get_transaction_by_id(
+        db,
+        transaction_id,
+        current_user
+    )
 
     if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found"
+        )
 
     return transaction
 
@@ -51,10 +59,18 @@ def update_transaction(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    transaction = service.update_transaction(db, transaction_id, transaction_update, current_user)
+    transaction = service.update_transaction(
+        db,
+        transaction_id,
+        transaction_update,
+        current_user
+    )
 
     if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found"
+        )
 
     return transaction
 
@@ -65,10 +81,18 @@ def delete_transaction(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    transaction = service.delete_transaction(db, transaction_id, current_user)
+    transaction = service.delete_transaction(
+        db,
+        transaction_id,
+        current_user
+    )
 
     if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found"
+        )
 
-    return {"message": "Transaction deleted successfully"}
-
+    return {
+        "message": "Transaction deleted successfully"
+    }
