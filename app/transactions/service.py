@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -101,15 +102,66 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, curr
     return _response_for(db, db_transaction)
 
 
-def get_transactions(db: Session, current_user: User) -> list[dict]:
-    rows = (
+def get_transactions(
+    db: Session,
+    current_user: User,
+    type: str | None = None,
+    category_id: uuid.UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    amount_min: int | None = None,
+    amount_max: int | None = None,
+    keyword: str | None = None,
+    limit: int = 20,
+    offset: int = 0
+) -> dict:
+    # 1. Base query 준비
+    query = (
         db.query(models.Transaction, Category.name)
         .outerjoin(Category, Category.id == models.Transaction.category_id)
         .filter(models.Transaction.user_id == current_user.id)
-        .order_by(models.Transaction.created_at.desc())
+    )
+
+    # 2. 필터링 조건 추가
+    if type is not None:
+        query = query.filter(models.Transaction.type == type)
+    if category_id is not None:
+        query = query.filter(models.Transaction.category_id == category_id)
+    if date_from is not None:
+        query = query.filter(models.Transaction.transaction_date >= date_from)
+    if date_to is not None:
+        query = query.filter(models.Transaction.transaction_date <= date_to)
+    if amount_min is not None:
+        query = query.filter(models.Transaction.amount >= amount_min)
+    if amount_max is not None:
+        query = query.filter(models.Transaction.amount <= amount_max)
+    if keyword is not None and keyword.strip() != "":
+        query = query.filter(models.Transaction.description.ilike(f"%{keyword}%"))
+
+    # 3. 전체 개수(total) 집계
+    total = query.count()
+
+    # 4. 정렬 및 페이지네이션 슬라이싱 적용
+    # transaction_date DESC, created_at DESC, id DESC 순 정렬
+    rows = (
+        query.order_by(
+            models.Transaction.transaction_date.desc(),
+            models.Transaction.created_at.desc(),
+            models.Transaction.id.desc()
+        )
+        .limit(limit)
+        .offset(offset)
         .all()
     )
-    return [_build_response(transaction, category_name) for transaction, category_name in rows]
+
+    items = [_build_response(transaction, category_name) for transaction, category_name in rows]
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 
 
 def get_transaction_by_id(db: Session, transaction_id: uuid.UUID, current_user: User) -> dict | None:

@@ -43,8 +43,10 @@ def test_create_and_read_goal(auth_client, test_user, test_category):
     # 2. 목록 조회 및 계산 필드 검증
     list_response = auth_client.get("/api/goals/")
     assert list_response.status_code == 200
-    assert len(list_response.json()) >= 1
-    goal_item = list_response.json()[0]
+    res_data = list_response.json()
+    assert res_data["total"] >= 1
+    assert len(res_data["items"]) >= 1
+    goal_item = res_data["items"][0]
     assert goal_item["current_amount"] == 0
     assert goal_item["progress_percentage"] == 0
     assert goal_item["status"] == "ON_TRACK"

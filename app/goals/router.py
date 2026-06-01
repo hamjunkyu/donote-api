@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
+from app.shared.schemas import PaginatedResponse
 from app.goals import schemas, service
 
 
@@ -51,18 +52,25 @@ def create_goal(
     return _map_goal_response(new_goal)
 
 
-@router.get("/", response_model=list[schemas.GoalResponse])
+@router.get("/", response_model=PaginatedResponse[schemas.GoalResponse])
 def get_goals(
     status: Literal["ACHIEVED", "EXPIRED", "CANCELLED", "ON_TRACK", "BEHIND"] | None = Query(
         default=None,
         description="목표 상태 필터 (ACHIEVED/EXPIRED/CANCELLED/ON_TRACK/BEHIND)",
     ),
+    category_id: uuid.UUID | None = Query(
+        default=None,
+        description="카테고리 ID 필터",
+    ),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """저축 목표 조회. status 파라미터로 상태별 필터링 가능 (예: 달성 내역은 status=ACHIEVED, 뒤처짐은 status=BEHIND)."""
-    goals = service.get_goals(db, current_user.id, status)
-    return [_map_goal_response(g) for g in goals]
+    res = service.get_goals(db, current_user.id, status, category_id, limit, offset)
+    res["items"] = [_map_goal_response(g) for g in res["items"]]
+    return res
 
 
 @router.get("/{goal_id}", response_model=schemas.GoalResponse)
@@ -97,22 +105,24 @@ def get_goal_progress(
 
 @router.get(
     "/{goal_id}/transactions",
-    response_model=list[schemas.ContributingTransactionResponse],
+    response_model=PaginatedResponse[schemas.ContributingTransactionResponse],
 )
 def get_goal_transactions(
     goal_id: uuid.UUID,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """저축 목표 달성에 기여한 거래 내역을 시간순으로 조회."""
-    transactions = service.get_contributing_transactions(
-        db, goal_id, current_user.id
+    res = service.get_contributing_transactions(
+        db, goal_id, current_user.id, limit, offset
     )
 
-    if transactions is None:
+    if res is None:
         raise HTTPException(status_code=404, detail="목표를 찾을 수 없습니다")
 
-    return transactions
+    return res
 
 
 @router.get("/{goal_id}/forecast", response_model=schemas.GoalForecastResponse)
