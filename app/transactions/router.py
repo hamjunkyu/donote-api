@@ -1,12 +1,14 @@
 import uuid
-from typing import List
+from typing import List, Optional, Literal
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.auth.models import User
 from app.database import get_db
+from app.shared.schemas import PaginatedResponse
 from . import schemas, service
 
 
@@ -22,12 +24,33 @@ def create_transaction(
     return service.create_transaction(db, transaction, current_user)
 
 
-@router.get("/", response_model=List[schemas.TransactionResponse])
+@router.get("/", response_model=PaginatedResponse[schemas.TransactionResponse])
 def get_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    type: Optional[Literal["INCOME", "EXPENSE"]] = Query(None),
+    category_id: Optional[uuid.UUID] = Query(None),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    amount_min: Optional[int] = Query(None),
+    amount_max: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
 ):
-    return service.get_transactions(db, current_user)
+    return service.get_transactions(
+        db,
+        current_user,
+        type=type,
+        category_id=category_id,
+        date_from=date_from,
+        date_to=date_to,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        keyword=keyword,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/{transaction_id}", response_model=schemas.TransactionResponse)

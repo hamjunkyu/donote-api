@@ -94,15 +94,24 @@ def create_goal(
 
 
 def get_goals(
-    db: Session, user_id: uuid.UUID, status: str | None = None
-) -> list[dict]:
+    db: Session,
+    user_id: uuid.UUID,
+    status: str | None = None,
+    category_id: uuid.UUID | None = None,
+    limit: int = 20,
+    offset: int = 0
+) -> dict:
     """사용자의 저축 목표를 최신순으로 조회한다."""
     progress_subq = _goal_progress_subquery()
     query = (
         db.query(Goal, progress_subq.label("current_amount"))
         .filter(Goal.user_id == user_id)
-        .order_by(Goal.created_at.desc())
     )
+
+    if category_id is not None:
+        query = query.filter(Goal.category_id == category_id)
+
+    query = query.order_by(Goal.created_at.desc())
 
     results = query.all()
     goals_list = []
@@ -125,7 +134,15 @@ def get_goals(
         else:
             goals_list.append(dto)
 
-    return goals_list
+    total = len(goals_list)
+    items = goals_list[offset:offset+limit]
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 
 
 def get_goal_by_id(
@@ -341,8 +358,12 @@ def get_goal_progress(
 
 
 def get_contributing_transactions(
-    db: Session, goal_id: uuid.UUID, user_id: uuid.UUID
-) -> list[Transaction] | None:
+    db: Session,
+    goal_id: uuid.UUID,
+    user_id: uuid.UUID,
+    limit: int = 20,
+    offset: int = 0
+) -> dict | None:
     """저축 목표 달성에 기여한 거래(연결 카테고리의 EXPENSE)를 시간순으로 조회한다."""
     goal = (
         db.query(Goal)
@@ -352,7 +373,7 @@ def get_contributing_transactions(
     if not goal:
         return None
 
-    return (
+    query = (
         db.query(Transaction)
         .filter(
             Transaction.user_id == goal.user_id,
@@ -360,9 +381,23 @@ def get_contributing_transactions(
             Transaction.type == "EXPENSE",
             Transaction.created_at >= goal.created_at,
         )
-        .order_by(Transaction.created_at.asc())
+    )
+
+    total = query.count()
+
+    items = (
+        query.order_by(Transaction.created_at.asc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 
 
 def forecast_completion(
