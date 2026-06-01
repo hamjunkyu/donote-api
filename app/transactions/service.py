@@ -135,18 +135,19 @@ def get_transactions(
         query = query.filter(models.Transaction.amount >= amount_min)
     if amount_max is not None:
         query = query.filter(models.Transaction.amount <= amount_max)
-    if keyword is not None:
+    if keyword is not None and keyword.strip() != "":
         query = query.filter(models.Transaction.description.ilike(f"%{keyword}%"))
 
     # 3. 전체 개수(total) 집계
     total = query.count()
 
     # 4. 정렬 및 페이지네이션 슬라이싱 적용
-    # transaction_date DESC, created_at DESC 순 정렬
+    # transaction_date DESC, created_at DESC, id DESC 순 정렬
     rows = (
         query.order_by(
             models.Transaction.transaction_date.desc(),
-            models.Transaction.created_at.desc()
+            models.Transaction.created_at.desc(),
+            models.Transaction.id.desc()
         )
         .limit(limit)
         .offset(offset)

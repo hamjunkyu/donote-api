@@ -52,8 +52,6 @@ def setup_db():
     alembic_cfg.set_main_option("sqlalchemy.url", settings.TEST_DATABASE_URL)
     command.upgrade(alembic_cfg, "head")
     yield
-    # 테스트 종료 후 스키마 제거
-    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture

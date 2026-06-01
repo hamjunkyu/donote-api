@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Optional, Literal
+from typing import Optional, Literal
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -38,6 +38,16 @@ def get_transactions(
     amount_max: Optional[int] = Query(None),
     keyword: Optional[str] = Query(None),
 ):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="date_from은 date_to보다 이전이어야 합니다",
+        )
+    if amount_min is not None and amount_max is not None and amount_min > amount_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="amount_min은 amount_max보다 작거나 같아야 합니다",
+        )
     return service.get_transactions(
         db,
         current_user,

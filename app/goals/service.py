@@ -111,7 +111,7 @@ def get_goals(
     if category_id is not None:
         query = query.filter(Goal.category_id == category_id)
 
-    query = query.order_by(Goal.created_at.desc())
+    query = query.order_by(Goal.created_at.desc(), Goal.id.desc())
 
     results = query.all()
     goals_list = []
@@ -386,7 +386,7 @@ def get_contributing_transactions(
     total = query.count()
 
     items = (
-        query.order_by(Transaction.created_at.asc())
+        query.order_by(Transaction.created_at.asc(), Transaction.id.asc())
         .limit(limit)
         .offset(offset)
         .all()

@@ -200,3 +200,27 @@ def test_goal_contributing_transactions_pagination(auth_client, db, test_user, m
         created_curr = datetime.fromisoformat(items[i]["created_at"].replace("Z", "+00:00"))
         created_next = datetime.fromisoformat(items[i+1]["created_at"].replace("Z", "+00:00"))
         assert created_curr <= created_next
+
+
+def test_transactions_empty_keyword(auth_client, setup_hundred_transactions):
+    # 빈 keyword="" 전달 시, description 필터링 없이 전체 100건이 조회되는지 검증
+    response = auth_client.get("/transactions?keyword=")
+    assert response.status_code == 200
+    assert response.json()["total"] == 100
+
+    # 공백만 있는 keyword="   " 전달 시에도 전체 100건이 조회되는지 검증
+    response_spaces = auth_client.get("/transactions?keyword=%20%20%20")
+    assert response_spaces.status_code == 200
+    assert response_spaces.json()["total"] == 100
+
+
+def test_transactions_contradictory_filters_error_400(auth_client):
+    # 1. date_from > date_to 모순 입력 시 -> 400 Bad Request
+    response = auth_client.get("/transactions?date_from=2026-05-10&date_to=2026-05-01")
+    assert response.status_code == 400
+    assert "date_from은 date_to보다 이전이어야 합니다" in response.json()["detail"]
+
+    # 2. amount_min > amount_max 모순 입력 시 -> 400 Bad Request
+    response = auth_client.get("/transactions?amount_min=5000&amount_max=1000")
+    assert response.status_code == 400
+    assert "amount_min은 amount_max보다 작거나 같아야 합니다" in response.json()["detail"]
