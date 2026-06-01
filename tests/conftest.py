@@ -48,10 +48,14 @@ def setup_db():
     # Alembic 마이그레이션 적용
     import os
     os.environ["TEST_DATABASE_URL"] = settings.TEST_DATABASE_URL
+    
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", settings.TEST_DATABASE_URL)
     command.upgrade(alembic_cfg, "head")
+    
     yield
+    # 스키마 drop_all을 제거하여 alembic_version 테이블이 유지되고
+    # 다음 테스트 세션 실행 시 upgrade head 스킵 오류가 발생하지 않도록 조치합니다.
 
 
 @pytest.fixture

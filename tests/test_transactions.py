@@ -10,12 +10,6 @@ from app.transactions.models import Transaction
 from app.settlements.models import Settlement, SettlementParticipant
 
 
-# settlement_status enum 이 마이그레이션상 'IN_PROGRESS' 인데 코드는 'PENDING' 사용.
-# PR9 (RENAME VALUE 'IN_PROGRESS'->'PENDING') 머지 전에는 테스트 DB에 PENDING 정산을
-# INSERT 할 수 없으므로 정산 연동 테스트는 skip. PR9 머지 후 skip 제거하면 그대로 통과.
-PR9_REASON = "PR9 settlement_status enum 'PENDING' 마이그레이션 후 활성화"
-
-
 @pytest.fixture
 def expense_category(db, test_user):
     category = Category(
@@ -196,7 +190,6 @@ def expense_with_settlement(db, test_user, expense_category):
     return txn, settlement, [p1, p2]
 
 
-@pytest.mark.skip(reason=PR9_REASON)
 def test_update_amount_cascade_equal(auth_client, db, expense_with_settlement):
     txn, settlement, parts = expense_with_settlement
     res = auth_client.patch(f"/transactions/{txn.id}", json={"amount": 60000})
@@ -208,7 +201,6 @@ def test_update_amount_cascade_equal(auth_client, db, expense_with_settlement):
         assert int(p.amount) == 20000  # 60000 // (2 + 1)
 
 
-@pytest.mark.skip(reason=PR9_REASON)
 def test_update_amount_keeps_settled_participant(auth_client, db, expense_with_settlement):
     txn, settlement, parts = expense_with_settlement
     p1, p2 = parts
@@ -223,7 +215,6 @@ def test_update_amount_keeps_settled_participant(auth_client, db, expense_with_s
     assert int(p2.amount) == 25000  # (60000 - 10000) // (1 + 1)
 
 
-@pytest.mark.skip(reason=PR9_REASON)
 def test_update_amount_below_settled_blocked(auth_client, db, expense_with_settlement):
     txn, settlement, parts = expense_with_settlement
     for p in parts:
@@ -234,14 +225,12 @@ def test_update_amount_below_settled_blocked(auth_client, db, expense_with_settl
     assert res.status_code == 400
 
 
-@pytest.mark.skip(reason=PR9_REASON)
 def test_update_type_change_with_settlement_blocked(auth_client, expense_with_settlement):
     txn, *_ = expense_with_settlement
     res = auth_client.patch(f"/transactions/{txn.id}", json={"type": "INCOME"})
     assert res.status_code == 400
 
 
-@pytest.mark.skip(reason=PR9_REASON)
 def test_update_completed_settlement_blocked(auth_client, db, expense_with_settlement):
     txn, settlement, parts = expense_with_settlement
     for p in parts:
@@ -253,7 +242,6 @@ def test_update_completed_settlement_blocked(auth_client, db, expense_with_settl
     assert res.status_code == 400
 
 
-@pytest.mark.skip(reason=PR9_REASON)
 def test_delete_transaction_cascades_settlement(auth_client, db, expense_with_settlement):
     txn, settlement, parts = expense_with_settlement
     settlement_id = settlement.id
