@@ -137,7 +137,7 @@ def test_budget_get_usage_overall_none(auth_client, my_category):
         assert b["category"] is not None
 
 
-def test_budget_upsert_race_condition(auth_client, db, test_user):
+def test_budget_upsert_modification_resets_flags(auth_client, db, test_user):
     # 동일 조건으로 여러번 upsert 호출
     # 최초 삽입
     response = auth_client.post("/api/budgets", json={
@@ -221,6 +221,13 @@ def test_budget_notification_and_refiring(auth_client, db, test_user, my_categor
     ).all()
     assert len(exceed_notif) == 1
     assert "식비" in exceed_notif[0].message
+
+    # 100% 도달 시 WARNING 조건(80 <= pct < 100)을 만족하지 않으므로 추가 WARNING 알림이 생성되지 않았어야 함
+    warn_notif = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "BUDGET_WARNING"
+    ).all()
+    assert len(warn_notif) == 1
 
     # 4. 거래 2만원 삭제 -> 소진율 하강 (100% -> 80%) -> exceeded flag reset 검증
     db.delete(tx2)
@@ -399,3 +406,111 @@ def test_user_requested_scenario(auth_client, db, test_user, my_category, other_
         Budget.year_month == "2026-05"
     ).first()
     assert overall_budget.is_warning_notified is True
+
+
+def test_budget_exceeded_refiring(auth_client, db, test_user, my_category):
+    # 1. 예산 10만원 설정
+    auth_client.post("/api/budgets", json={
+        "year_month": "2026-05",
+        "amount": 100000,
+        "category_id": str(my_category.id)
+    })
+    
+    # 2. 10만원 지출 추가 -> 100% 도달 (EXCEEDED)
+    tx = Transaction(
+        id=uuid.uuid4(),
+        user_id=test_user.id,
+        type="EXPENSE",
+        amount=100000,
+        category_id=my_category.id,
+        description="식비 100%",
+        transaction_date=date(2026, 5, 10),
+        created_at=datetime.utcnow()
+    )
+    db.add(tx)
+    db.commit()
+    
+    check_and_notify_budget_threshold(db, test_user.id, date(2026, 5, 10))
+    
+    # 1차 초과 알림 발생 검증
+    exceed_notif = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "BUDGET_EXCEEDED"
+    ).all()
+    assert len(exceed_notif) == 1
+    
+    # 3. 2만원 거래 금액 하향 조정 -> 80% 수준으로 하강 -> exceeded flag 리셋 검증
+    tx.amount = 80000
+    db.commit()
+    
+    check_and_notify_budget_threshold(db, test_user.id, date(2026, 5, 10))
+    
+    budget = db.query(Budget).filter(Budget.user_id == test_user.id, Budget.category_id == my_category.id).first()
+    assert budget.is_exceeded_notified is False
+    
+    # 4. 다시 2만원 추가 지출 -> 100% 도달 -> 초과 알림 재발화 검증
+    tx.amount = 100000
+    db.commit()
+    
+    check_and_notify_budget_threshold(db, test_user.id, date(2026, 5, 10))
+    
+    exceed_notif2 = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "BUDGET_EXCEEDED"
+    ).all()
+    assert len(exceed_notif2) == 2
+
+
+def test_budget_threshold_boundary(auth_client, db, test_user, my_category):
+    # 1. 예산 10만원 설정
+    auth_client.post("/api/budgets", json={
+        "year_month": "2026-05",
+        "amount": 100000,
+        "category_id": str(my_category.id)
+    })
+    
+    # 2. 정확히 8만원(80.0%) 지출 추가
+    tx = Transaction(
+        id=uuid.uuid4(),
+        user_id=test_user.id,
+        type="EXPENSE",
+        amount=80000,
+        category_id=my_category.id,
+        description="식비 80%",
+        transaction_date=date(2026, 5, 10),
+        created_at=datetime.utcnow()
+    )
+    db.add(tx)
+    db.commit()
+    
+    check_and_notify_budget_threshold(db, test_user.id, date(2026, 5, 10))
+    
+    # WARNING 발생 검증 (경계값 80% 작동)
+    warn_notif = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "BUDGET_WARNING"
+    ).all()
+    assert len(warn_notif) == 1
+    
+    # 3. 2만원 추가로 정확히 10만원(100.0%) 지출 추가
+    tx2 = Transaction(
+        id=uuid.uuid4(),
+        user_id=test_user.id,
+        type="EXPENSE",
+        amount=20000,
+        category_id=my_category.id,
+        description="식비 100%",
+        transaction_date=date(2026, 5, 10),
+        created_at=datetime.utcnow()
+    )
+    db.add(tx2)
+    db.commit()
+    
+    check_and_notify_budget_threshold(db, test_user.id, date(2026, 5, 10))
+    
+    # EXCEEDED 발생 검증 (경계값 100% 작동)
+    exceed_notif = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "BUDGET_EXCEEDED"
+    ).all()
+    assert len(exceed_notif) == 1

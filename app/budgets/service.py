@@ -3,8 +3,9 @@
 import uuid
 from typing import List, Optional, Dict
 from datetime import datetime, date
-from sqlalchemy import select, delete, func, and_
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
 from app.budgets.models import Budget
@@ -57,7 +58,7 @@ def upsert_budget(db: Session, user_id: uuid.UUID, year_month: str, amount: floa
             db.commit()
             db.refresh(budget)
             return budget
-        except Exception as e:
+        except IntegrityError as e:
             db.rollback()
             if attempt == 2:
                 raise e
@@ -224,8 +225,8 @@ def check_and_notify_budget_threshold(db: Session, user_id: uuid.UUID, transacti
                 budget.is_exceeded_notified = False
                 db.commit()
                 
-        # 80% 초과(WARNING) 알림
-        if percentage >= 80:
+        # 80% 초과, 100% 미만(WARNING) 알림
+        if 80 <= percentage < 100:
             if not budget.is_warning_notified:
                 msg = (
                     "이번달 예산이 80% 사용되었습니다."
@@ -237,6 +238,7 @@ def check_and_notify_budget_threshold(db: Session, user_id: uuid.UUID, transacti
                 db.commit()
         else:
             # 80% 아래로 떨어지면 리셋 (재발화 가능)
-            if budget.is_warning_notified:
+            # 100% 이상일 때는 warning 리셋을 하지 않도록 percentage < 80 조건 가드 적용
+            if percentage < 80 and budget.is_warning_notified:
                 budget.is_warning_notified = False
                 db.commit()

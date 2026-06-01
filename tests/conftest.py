@@ -49,20 +49,13 @@ def setup_db():
     import os
     os.environ["TEST_DATABASE_URL"] = settings.TEST_DATABASE_URL
     
-    # alembic_version 테이블 잔존으로 인한 테이블 미생성 현상을 방지하기 위해
-    # Base.metadata.create_all을 사용해 강제로 스키마를 초기화합니다.
-    Base.metadata.create_all(bind=engine)
-    
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", settings.TEST_DATABASE_URL)
-    try:
-        command.upgrade(alembic_cfg, "head")
-    except Exception:
-        pass
-        
+    command.upgrade(alembic_cfg, "head")
+    
     yield
-    # 테스트 종료 후 스키마 제거
-    Base.metadata.drop_all(bind=engine)
+    # 스키마 drop_all을 제거하여 alembic_version 테이블이 유지되고
+    # 다음 테스트 세션 실행 시 upgrade head 스킵 오류가 발생하지 않도록 조치합니다.
 
 
 @pytest.fixture
