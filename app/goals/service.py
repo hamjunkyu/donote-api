@@ -483,10 +483,14 @@ def get_monthly_trend(
 
 
 def check_and_notify_goal_achievement(
-    db: Session, user_id: uuid.UUID, category_id: uuid.UUID
+    db: Session, user_id: uuid.UUID, category_id: uuid.UUID, commit: bool = True
 ) -> None:
     """거래 생성/수정/삭제 시 호출되어 해당 카테고리에 연결된 목표의 진행 상태를 확인하고,
     마일스톤 및 최종 달성 알림을 처리하고 상태를 갱신합니다.
+
+    동시 거래가 같은 목표의 알림 플래그를 동시에 읽어 중복 알림을 보내는 것을
+    막기 위해 목표 행을 with_for_update 로 잠근다.
+    commit=False 면 커밋하지 않고 호출자가 단일 커밋으로 묶는다.
     """
     progress_subq = _goal_progress_subquery()
     goals_with_progress = (
@@ -496,6 +500,8 @@ def check_and_notify_goal_achievement(
             Goal.category_id == category_id,
             Goal.status.in_(["IN_PROGRESS", "ACHIEVED"]),
         )
+        .with_for_update(of=Goal)
+        .order_by(Goal.id)
         .all()
     )
 
@@ -521,6 +527,7 @@ def check_and_notify_goal_achievement(
                         user_id,
                         "GOAL_MILESTONE",
                         f"{goal.name} 목표 {pct}% 달성!",
+                        commit=False,
                     )
             else:
                 if getattr(goal, flag):
@@ -536,6 +543,7 @@ def check_and_notify_goal_achievement(
                     user_id,
                     "GOAL_ACHIEVED",
                     f"🎉 목표 달성! {goal.name}",
+                    commit=False,
                 )
         else:
             if goal.is_achieved_notified:
@@ -543,7 +551,8 @@ def check_and_notify_goal_achievement(
                 goal.achieved_at = None
                 goal.is_achieved_notified = False
 
-    db.commit()
+    if commit:
+        db.commit()
 
 
 def cancel_goal(

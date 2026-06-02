@@ -61,6 +61,7 @@ def _notify_affected(
     old_category_id: uuid.UUID | None,
     old_date,
     transaction: models.Transaction,
+    commit: bool = True,
 ) -> None:
     """변경 전/후 EXPENSE 컨텍스트에 대해 budget/goal 알림 재평가.
 
@@ -77,10 +78,13 @@ def _notify_affected(
         goal_categories.add(transaction.category_id)
         budget_dates.add(transaction.transaction_date)
 
-    for category_id in goal_categories:
-        check_and_notify_goal_achievement(db, user_id, category_id)
-    for transaction_date in budget_dates:
-        check_and_notify_budget_threshold(db, user_id, transaction_date)
+    # 락 순서를 모든 경로·워커에서 동일하게 고정해 동시 거래 간 데드락 방지.
+    # 자원 종류는 budget → goal (create/delete 와 동일), 같은 종류 안에서는 정렬 순.
+    # (date 해시는 프로세스마다 달라 정렬 없이는 멀티워커에서 순회 순서가 어긋날 수 있음)
+    for transaction_date in sorted(budget_dates):
+        check_and_notify_budget_threshold(db, user_id, transaction_date, commit=commit)
+    for category_id in sorted(goal_categories, key=str):
+        check_and_notify_goal_achievement(db, user_id, category_id, commit=commit)
 
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user: User) -> dict:
@@ -97,12 +101,14 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, curr
     )
 
     db.add(db_transaction)
-    db.commit()
-    db.refresh(db_transaction)
+    db.flush()  # ID 확보. commit 은 알림까지 끝낸 뒤 한 번만.
 
     if db_transaction.type == "EXPENSE":
-        check_and_notify_budget_threshold(db, current_user.id, db_transaction.transaction_date)
-        check_and_notify_goal_achievement(db, current_user.id, db_transaction.category_id)
+        check_and_notify_budget_threshold(db, current_user.id, db_transaction.transaction_date, commit=False)
+        check_and_notify_goal_achievement(db, current_user.id, db_transaction.category_id, commit=False)
+
+    db.commit()
+    db.refresh(db_transaction)
 
     return _response_for(db, db_transaction)
 
@@ -232,10 +238,12 @@ def update_transaction(
     if transaction_update.amount is not None and int(transaction_update.amount) != old_amount:
         settlement_service.update_settlement_total(db, transaction.id, int(transaction_update.amount))
 
+    db.flush()  # 변경 사항 반영. commit 은 알림까지 끝낸 뒤 한 번만.
+
+    _notify_affected(db, current_user.id, old_type, old_category_id, old_date, transaction, commit=False)
+
     db.commit()
     db.refresh(transaction)
-
-    _notify_affected(db, current_user.id, old_type, old_category_id, old_date, transaction)
 
     return _response_for(db, transaction)
 
@@ -255,11 +263,13 @@ def delete_transaction(db: Session, transaction_id: uuid.UUID, current_user: Use
     transaction_date = transaction.transaction_date
 
     db.delete(transaction)
-    db.commit()
+    db.flush()  # FK CASCADE 로 연결 정산 삭제 반영. commit 은 알림 후 한 번만.
 
     # 삭제로 누적 지출이 줄었으므로 영향받은 budget/goal 재평가
     if was_expense:
-        check_and_notify_budget_threshold(db, current_user.id, transaction_date)
-        check_and_notify_goal_achievement(db, current_user.id, category_id)
+        check_and_notify_budget_threshold(db, current_user.id, transaction_date, commit=False)
+        check_and_notify_goal_achievement(db, current_user.id, category_id, commit=False)
+
+    db.commit()
 
     return True

@@ -155,15 +155,25 @@ def get_budget_usage(db: Session, user_id: uuid.UUID, year_month: str) -> Dict:
     }
 
 
-def check_and_notify_budget_threshold(db: Session, user_id: uuid.UUID, transaction_date: date):
-    """지출 변경 시 예산 임계값을 확인하고 알림을 생성한다."""
+def check_and_notify_budget_threshold(
+    db: Session, user_id: uuid.UUID, transaction_date: date, commit: bool = True
+):
+    """지출 변경 시 예산 임계값을 확인하고 알림을 생성한다.
+
+    동시 거래가 같은 예산의 알림 플래그를 동시에 읽어 중복 알림을 보내는 것을
+    막기 위해 예산 행을 with_for_update 로 잠근다.
+    commit=False 면 커밋하지 않고 호출자가 단일 커밋으로 묶는다.
+    """
     year_month = transaction_date.strftime("%Y-%m")
-    
+
     # 1. 해당 월의 모든 예산 설정 로드 (Category Join으로 N+1 방지)
+    #    of=Budget: outerjoin 의 nullable 측(Category)은 잠그지 않는다
     stmt = (
         select(Budget, Category.name.label("category_name"))
         .outerjoin(Category, Category.id == Budget.category_id)
         .where(Budget.user_id == user_id, Budget.year_month == year_month)
+        .with_for_update(of=Budget)
+        .order_by(Budget.id)
     )
     results = db.execute(stmt).all()
     if not results:
@@ -217,15 +227,13 @@ def check_and_notify_budget_threshold(db: Session, user_id: uuid.UUID, transacti
                     if budget.category_id is None
                     else f"이번달 {label} 예산이 100% 사용되었습니다. (예산: {amount:,.0f}원)"
                 )
-                create_notification(db, user_id, "BUDGET_EXCEEDED", msg)
+                create_notification(db, user_id, "BUDGET_EXCEEDED", msg, commit=False)
                 budget.is_exceeded_notified = True
-                db.commit()
         else:
             # 100% 아래로 떨어지면 리셋 (재발화 가능)
             if budget.is_exceeded_notified:
                 budget.is_exceeded_notified = False
-                db.commit()
-                
+
         # 80% 초과, 100% 미만(WARNING) 알림
         if 80 <= percentage < 100:
             if not budget.is_warning_notified:
@@ -234,12 +242,13 @@ def check_and_notify_budget_threshold(db: Session, user_id: uuid.UUID, transacti
                     if budget.category_id is None
                     else f"이번달 {label} 예산이 80% 사용되었습니다."
                 )
-                create_notification(db, user_id, "BUDGET_WARNING", msg)
+                create_notification(db, user_id, "BUDGET_WARNING", msg, commit=False)
                 budget.is_warning_notified = True
-                db.commit()
         else:
             # 80% 아래로 떨어지면 리셋 (재발화 가능)
             # 100% 이상일 때는 warning 리셋을 하지 않도록 percentage < 80 조건 가드 적용
             if percentage < 80 and budget.is_warning_notified:
                 budget.is_warning_notified = False
-                db.commit()
+
+    if commit:
+        db.commit()

@@ -202,16 +202,20 @@ def delete_refresh_token(db: Session, token: str) -> None:
     db.commit()
 
 
-def delete_all_refresh_tokens(db: Session, user_id: uuid.UUID) -> None:
+def delete_all_refresh_tokens(db: Session, user_id: uuid.UUID, commit: bool = True) -> None:
     """사용자의 모든 리프레시 토큰을 삭제한다.
 
     비밀번호 변경 시 모든 기기에서 재로그인을 강제하기 위해 사용.
+    commit=False 면 삭제만 하고 커밋은 호출자가 담당한다 (비밀번호 변경과
+    한 트랜잭션으로 묶을 때 사용).
 
     Args:
         db: 데이터베이스 세션.
         user_id: 토큰을 삭제할 사용자의 UUID.
+        commit: False 면 커밋하지 않는다.
     """
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user_id
     ).delete()
-    db.commit()
+    if commit:
+        db.commit()
