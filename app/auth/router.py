@@ -214,12 +214,13 @@ def change_password(
             detail="현재 비밀번호가 일치하지 않습니다",
         )
 
+    # 비밀번호 변경과 토큰 무효화를 한 트랜잭션으로 묶는다.
+    # 분리하면 비밀번호만 바뀌고 다른 기기 토큰이 살아남는 보안 구멍이 생긴다.
     current_user.password_hash = service.hash_password(
         request.new_password
     )
+    service.delete_all_refresh_tokens(db, current_user.id, commit=False)
     db.commit()
-
-    service.delete_all_refresh_tokens(db, current_user.id)
 
     return MessageResponse(
         message="비밀번호가 변경되었습니다. 다시 로그인해주세요."

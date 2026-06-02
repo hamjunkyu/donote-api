@@ -145,8 +145,12 @@ def add_participant(
     db.add(new_participant)
     db.flush()  # ID 확보
 
-    # 내 몫 검증 (새 참여자 amount 포함)
-    _validate_creator_share(db, settlement_id)
+    # 내 몫 검증 (새 참여자 amount 포함). 실패 시 flush 된 참여자를 롤백한다.
+    try:
+        _validate_creator_share(db, settlement_id)
+    except HTTPException:
+        db.rollback()
+        raise
 
     db.commit()
     db.refresh(new_participant)
