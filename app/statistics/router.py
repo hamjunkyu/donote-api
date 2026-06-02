@@ -23,7 +23,7 @@ def get_summary(
         
     return service.get_period_summary(db, current_user.id, period, date_from, date_to)
 
-@router.get("/categories", response_model=schemas.CategoryStatResponse)
+@router.get("/categories", response_model=schemas.CategoryStatResponse, response_model_exclude_none=True)
 def get_categories(
     date_from: date = Query(...),
     date_to: date = Query(...),

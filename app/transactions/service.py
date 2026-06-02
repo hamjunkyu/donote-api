@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from . import models, schemas
+from .helpers import actual_spent_subquery
 from app.auth.models import User
 from app.categories.models import Category
 from app.settlements import service as settlement_service
@@ -26,13 +27,14 @@ def _validate_category(db: Session, category_id: uuid.UUID, user_id: uuid.UUID) 
     return category
 
 
-def _build_response(transaction: models.Transaction, category_name: str | None) -> dict:
-    """Transaction + category_name 을 TransactionResponse 매핑용 dict 로 변환."""
+def _build_response(transaction: models.Transaction, category_name: str | None, actual_amount: int) -> dict:
+    """Transaction + category_name + 실부담액 을 TransactionResponse 매핑용 dict 로 변환."""
     return {
         "id": transaction.id,
         "user_id": transaction.user_id,
         "type": transaction.type,
         "amount": int(transaction.amount),
+        "actual_amount": int(actual_amount),
         "category_id": transaction.category_id,
         "category_name": category_name,
         "description": transaction.description,
@@ -44,9 +46,12 @@ def _build_response(transaction: models.Transaction, category_name: str | None) 
 
 
 def _response_for(db: Session, transaction: models.Transaction) -> dict:
-    """단건 Transaction 의 category_name 을 조회해 응답 dict 구성."""
+    """단건 Transaction 의 category_name + 실부담액 을 조회해 응답 dict 구성."""
     category = db.get(Category, transaction.category_id)
-    return _build_response(transaction, category.name if category else None)
+    actual_amount = db.query(actual_spent_subquery()).filter(
+        models.Transaction.id == transaction.id
+    ).scalar()
+    return _build_response(transaction, category.name if category else None, actual_amount)
 
 
 def _notify_affected(
@@ -117,7 +122,7 @@ def get_transactions(
 ) -> dict:
     # 1. Base query 준비
     query = (
-        db.query(models.Transaction, Category.name)
+        db.query(models.Transaction, Category.name, actual_spent_subquery())
         .outerjoin(Category, Category.id == models.Transaction.category_id)
         .filter(models.Transaction.user_id == current_user.id)
     )
@@ -154,7 +159,10 @@ def get_transactions(
         .all()
     )
 
-    items = [_build_response(transaction, category_name) for transaction, category_name in rows]
+    items = [
+        _build_response(transaction, category_name, actual_amount)
+        for transaction, category_name, actual_amount in rows
+    ]
 
     return {
         "items": items,

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal, List
+from typing import Literal, List, Optional
 from uuid import UUID
 
 class PeriodDataItem(BaseModel):
@@ -18,7 +18,8 @@ class CategoryStatItem(BaseModel):
     ratio: float
 
 class CategoryStatResponse(BaseModel):
-    total_amount: int
+    total_income: Optional[int] = None
+    total_expense: Optional[int] = None
     categories: List[CategoryStatItem]
 
 class TopCategoryItem(BaseModel):

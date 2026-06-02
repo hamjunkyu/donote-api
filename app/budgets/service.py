@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from app.budgets.models import Budget
 from app.transactions.models import Transaction
+from app.transactions.helpers import actual_spent_subquery
 from app.categories.models import Category
 from app.notifications.service import create_notification
 
@@ -90,7 +91,7 @@ def get_budget_usage(db: Session, user_id: uuid.UUID, year_month: str) -> Dict:
         end_date = date(start_date.year, start_date.month + 1, 1)
 
     expenses = db.execute(
-        select(Transaction.category_id, func.sum(Transaction.amount).label("total"))
+        select(Transaction.category_id, func.sum(actual_spent_subquery()).label("total"))
         .where(
             Transaction.user_id == user_id,
             Transaction.type == "EXPENSE",
@@ -176,7 +177,7 @@ def check_and_notify_budget_threshold(db: Session, user_id: uuid.UUID, transacti
         end_date = date(start_date.year, start_date.month + 1, 1)
 
     expenses = db.execute(
-        select(Transaction.category_id, func.sum(Transaction.amount).label("total"))
+        select(Transaction.category_id, func.sum(actual_spent_subquery()).label("total"))
         .where(
             Transaction.user_id == user_id,
             Transaction.type == "EXPENSE",
