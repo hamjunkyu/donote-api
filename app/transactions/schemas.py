@@ -18,6 +18,7 @@ class TransactionResponse(BaseModel):
     user_id: UUID
     type: str
     amount: int
+    actual_amount: int
     category_id: UUID
     category_name: Optional[str]
     description: Optional[str]

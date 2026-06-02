@@ -1,26 +1,10 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, desc, case
 from app.transactions.models import Transaction
-from app.settlements.models import Settlement, SettlementParticipant
+from app.transactions.helpers import actual_spent_subquery
 from app.categories.models import Category
 import calendar
 from datetime import date
-
-def _actual_amount_subquery():
-    """
-    거래의 실부담액을 계산하는 서브쿼리.
-    """
-    participant_sum = (
-        select(func.coalesce(func.sum(SettlementParticipant.amount), 0))
-        .join(Settlement, Settlement.id == SettlementParticipant.settlement_id)
-        .where(
-            Settlement.transaction_id == Transaction.id,
-            Settlement.status != "CANCELLED",
-        )
-        .correlate(Transaction)
-        .scalar_subquery()
-    )
-    return (Transaction.amount - participant_sum).label("actual_amount")
 
 def get_period_summary(db: Session, user_id: str, period: str, date_from: date, date_to: date):
     if period == "daily":
@@ -32,7 +16,7 @@ def get_period_summary(db: Session, user_id: str, period: str, date_from: date, 
     else:
         group_expr = func.to_char(Transaction.transaction_date, 'YYYY-MM-DD')
         
-    actual_amount_expr = _actual_amount_subquery()
+    actual_amount_expr = actual_spent_subquery()
     
     income_expr = func.sum(
         case(
@@ -76,7 +60,7 @@ def get_period_summary(db: Session, user_id: str, period: str, date_from: date, 
     return {"period": period, "data": data}
 
 def get_category_statistics(db: Session, user_id: str, date_from: date, date_to: date, txn_type: str):
-    actual_amount_expr = _actual_amount_subquery()
+    actual_amount_expr = actual_spent_subquery()
     
     query = (
         select(
@@ -110,8 +94,9 @@ def get_category_statistics(db: Session, user_id: str, date_from: date, date_to:
             "ratio": ratio
         })
         
+    total_key = "total_income" if txn_type == "INCOME" else "total_expense"
     return {
-        "total_amount": int(total_amount),
+        total_key: int(total_amount),
         "categories": categories
     }
 
@@ -122,7 +107,7 @@ def get_monthly_report(db: Session, user_id: str, month: str):
     date_from = date(year, mon, 1)
     date_to = date(year, mon, last_day)
     
-    actual_amount_expr = _actual_amount_subquery()
+    actual_amount_expr = actual_spent_subquery()
     
     income_expr = func.sum(case((Transaction.type == 'INCOME', actual_amount_expr), else_=0))
     expense_expr = func.sum(case((Transaction.type == 'EXPENSE', actual_amount_expr), else_=0))
