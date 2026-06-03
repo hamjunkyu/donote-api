@@ -170,15 +170,18 @@ def test_goal_milestones_and_refiring(auth_client, test_user, test_category, db)
 
 def test_goal_border_day_status(auth_client, test_user, test_category, db):
     # 오늘이 마감일인데 목표 달성액이 부족한 경우 -> BEHIND로 올바르게 상태 판정되는지 검증
+    # target_date 와 created_at 을 같은 UTC 기준으로 맞춰 total_days = 0 을 결정적으로 만든다
+    # (date.today() 는 로컬이라 created_at(UTC)과 어긋나면 total_days 가 0 이 아닐 수 있음)
+    now = datetime.utcnow()
     goal = Goal(
         id=uuid.uuid4(),
         user_id=test_user.id,
         name="오늘까지 마감 목표",
         target_amount=100000,
-        target_date=date.today(),
+        target_date=now.date(),
         category_id=test_category.id,
         status="IN_PROGRESS",
-        created_at=datetime.utcnow() # 오늘 만듦 (total_days = 0)
+        created_at=now  # 오늘 만듦 (total_days = 0)
     )
     db.add(goal)
     db.commit()
