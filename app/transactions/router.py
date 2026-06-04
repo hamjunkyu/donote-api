@@ -1,8 +1,10 @@
 import uuid
+from io import BytesIO
 from typing import Optional, Literal
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
@@ -60,6 +62,21 @@ def get_transactions(
         keyword=keyword,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/export")
+def export_transactions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """거래 내역을 CSV로 내보낸다 (import 포맷과 동일 컬럼)."""
+    csv_content = service.export_transactions_csv(db, current_user)
+    csv_bytes = csv_content.encode("utf-8-sig")
+    return StreamingResponse(
+        BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="transactions.csv"'},
     )
 
 

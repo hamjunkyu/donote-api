@@ -1,3 +1,5 @@
+import csv
+import io
 import uuid
 from datetime import date
 
@@ -273,3 +275,33 @@ def delete_transaction(db: Session, transaction_id: uuid.UUID, current_user: Use
     db.commit()
 
     return True
+
+
+def export_transactions_csv(db: Session, current_user) -> str:
+    """사용자 거래를 CSV 문자열로 변환한다 (import 포맷과 동일 컬럼)."""
+    rows = (
+        db.query(models.Transaction, Category.name.label("category_name"))
+        .join(Category, Category.id == models.Transaction.category_id)
+        .filter(models.Transaction.user_id == current_user.id)
+        .order_by(
+            models.Transaction.transaction_date.desc(),
+            models.Transaction.created_at.desc(),
+        )
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["날짜", "유형", "카테고리", "금액", "메모"])
+
+    type_map = {"INCOME": "수입", "EXPENSE": "지출"}
+    for transaction, category_name in rows:
+        writer.writerow([
+            transaction.transaction_date,
+            type_map.get(transaction.type, transaction.type),
+            category_name,
+            int(transaction.amount),
+            transaction.description or "",
+        ])
+
+    return output.getvalue()
