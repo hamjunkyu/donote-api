@@ -30,10 +30,14 @@ def parse_csv_content(decoded_content: str) -> Iterator[CSVRowData]:
         except ValueError:
             amount = 0.0
 
+        # 유형: 한글(수입/지출)·영문(INCOME/EXPENSE) 모두 허용 → 영문으로 통일
+        type_raw = row.get("유형", "EXPENSE").strip()
+        type_value = {"수입": "INCOME", "지출": "EXPENSE"}.get(type_raw, type_raw.upper())
+
         yield CSVRowData(
             row_number=index,
             transaction_date=row.get("날짜", "").strip(),
-            type=row.get("유형", "EXPENSE").strip().upper(),
+            type=type_value,
             category=row.get("카테고리", "").strip(),
             amount=amount,
             memo=row.get("메모", "").strip()
@@ -71,12 +75,11 @@ def process_import_batch(
             result.duplicate_count += 1
             continue
 
-        # 카테고리 텍스트 자동 매칭 (매칭 실패 시 type별 시스템 기본 카테고리로 폴백)
-        category_id = category_map.get(row.category)
+        # 카테고리 텍스트 자동 매칭 ((name, type) 조합). 실패 시 "기타"로 폴백.
+        category_id = category_map.get((row.category, row.type))
 
         if category_id is None:
-            fallback_name = "기타수익" if row.type == "INCOME" else "식비"
-            category_id = category_map.get(fallback_name)
+            category_id = category_map.get(("기타", row.type))
 
         if category_id is None:
             result.errors.append(
@@ -116,7 +119,7 @@ def process_csv_import(db: Session, user_id: uuid.UUID, row_generator: Iterator[
     categories = db.query(Category).filter(
         or_(Category.user_id == user_id, Category.user_id == None)
     ).all()
-    category_map = {c.name: c.id for c in categories}
+    category_map = {(c.name, c.type): c.id for c in categories}
     
     for row in row_generator:
         batch.append(row)

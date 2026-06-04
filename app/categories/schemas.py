@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from uuid import UUID
 from enum import Enum
 from typing import Optional
@@ -19,6 +19,12 @@ class CategoryUpdate(BaseModel):
 
 class CategoryResponse(CategoryBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: UUID
     user_id: Optional[UUID] = None
+
+    @computed_field
+    @property
+    def is_system(self) -> bool:
+        """시스템 기본 카테고리 여부 (user_id 없으면 시스템)."""
+        return self.user_id is None
