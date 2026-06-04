@@ -1,24 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from app.database import get_db
 from app.auth.dependencies import get_current_user
-from .schemas import CategoryResponse, CategoryCreate, CategoryUpdate
+from .schemas import CategoryResponse, CategoryCreate, CategoryUpdate, CategoryType
 from . import service
 
 router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
 @router.get("/", response_model=List[CategoryResponse], summary="카테고리 목록 조회")
 def list_categories(
+    type: Optional[CategoryType] = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     """
     시스템 기본 카테고리와 현재 로그인한 사용자의 커스텀 카테고리를 모두 조회합니다.
+    type 파라미터로 INCOME/EXPENSE 필터링 가능.
     """
-    return service.get_categories(db, current_user.id)
+    return service.get_categories(db, current_user.id, type=type.value if type else None)
 
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED, summary="카테고리 생성")
 def create_category(

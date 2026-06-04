@@ -17,11 +17,23 @@ def init_default_categories(db: Session) -> None:
     
     if not existing:
         default_categories = [
+            # 지출 (11)
             {"name": "식비", "type": "EXPENSE"},
+            {"name": "카페/간식", "type": "EXPENSE"},
             {"name": "교통", "type": "EXPENSE"},
+            {"name": "생활/마트", "type": "EXPENSE"},
             {"name": "쇼핑", "type": "EXPENSE"},
-            {"name": "급여", "type": "INCOME"},
-            {"name": "기타수익", "type": "INCOME"}
+            {"name": "주거/통신", "type": "EXPENSE"},
+            {"name": "의료/건강", "type": "EXPENSE"},
+            {"name": "문화/여가", "type": "EXPENSE"},
+            {"name": "교육", "type": "EXPENSE"},
+            {"name": "경조사/회비", "type": "EXPENSE"},
+            {"name": "기타", "type": "EXPENSE"},
+            # 수입 (4)
+            {"name": "급여/알바", "type": "INCOME"},
+            {"name": "용돈", "type": "INCOME"},
+            {"name": "금융소득", "type": "INCOME"},
+            {"name": "기타", "type": "INCOME"},
         ]
         
         for cat_data in default_categories:
@@ -33,10 +45,13 @@ def init_default_categories(db: Session) -> None:
             db.add(new_cat)
         db.commit()
 
-def get_categories(db: Session, user_id: UUID) -> Sequence[Category]:
+def get_categories(db: Session, user_id: UUID, type: Optional[str] = None) -> Sequence[Category]:
     stmt = select(Category).where(
         or_(Category.user_id.is_(None), Category.user_id == user_id)
     )
+    if type is not None:
+        stmt = stmt.where(Category.type == type)
+    stmt = stmt.order_by(Category.type, Category.name)
     result = db.execute(stmt)
     return result.scalars().all()
 
