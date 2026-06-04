@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 import uuid
 
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from . import schemas, service
@@ -29,6 +32,28 @@ def get_transactions(
     current_user = Depends(get_current_user)
 ):
     return service.get_transactions(db, current_user)
+
+
+@router.get("/export")
+def export_transactions(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    csv_content = service.export_transactions_csv(
+        db,
+        current_user
+    )
+
+    csv_bytes = ("\ufeff" + csv_content).encode("utf-8")
+
+    return StreamingResponse(
+        BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+            'attachment; filename="transactions.csv"'
+        }
+    )
 
 
 @router.get("/{transaction_id}", response_model=schemas.TransactionResponse)
@@ -96,3 +121,5 @@ def delete_transaction(
     return {
         "message": "Transaction deleted successfully"
     }
+
+
