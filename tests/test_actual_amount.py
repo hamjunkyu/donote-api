@@ -66,7 +66,7 @@ def _add_settlement(db, txn, user, total=9000, participant_amounts=(3000, 3000))
 
 
 def _actual_amount_in_list(auth_client, txn_id):
-    res = auth_client.get("/transactions")
+    res = auth_client.get("/api/transactions")
     assert res.status_code == 200
     for item in res.json()["items"]:
         if item["id"] == str(txn_id):
@@ -107,7 +107,7 @@ def test_single_transaction_actual_amount(auth_client, db, test_user, expense_ca
     parts[0].status = "SETTLED"
     db.commit()
 
-    res = auth_client.get(f"/transactions/{txn.id}")
+    res = auth_client.get(f"/api/transactions/{txn.id}")
     assert res.status_code == 200
     body = res.json()
     assert body["amount"] == 9000
@@ -218,6 +218,6 @@ def test_actual_amount_income_equals_amount(auth_client, db, test_user):
     db.add(txn)
     db.commit()
 
-    res = auth_client.get(f"/transactions/{txn.id}")
+    res = auth_client.get(f"/api/transactions/{txn.id}")
     assert res.status_code == 200
     assert res.json()["actual_amount"] == 500000

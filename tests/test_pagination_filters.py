@@ -67,8 +67,8 @@ def setup_hundred_transactions(db, test_user, my_category, transport_category):
 
 
 def test_transactions_pagination_and_sorting(auth_client, setup_hundred_transactions):
-    # 1. limit=20 페이징 테스트 -> items 20개, total 100건 (경로 /transactions 로 매칭)
-    response = auth_client.get("/transactions?limit=20&offset=0")
+    # 1. limit=20 페이징 테스트 -> items 20개, total 100건 (경로 /api/transactions 로 매칭)
+    response = auth_client.get("/api/transactions?limit=20&offset=0")
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["total"] == 100
@@ -90,23 +90,23 @@ def test_transactions_pagination_and_sorting(auth_client, setup_hundred_transact
 
 def test_transactions_filters_and_keyword(auth_client, setup_hundred_transactions, my_category):
     # 1. type=EXPENSE 필터링 -> total 100
-    response = auth_client.get("/transactions?type=EXPENSE")
+    response = auth_client.get("/api/transactions?type=EXPENSE")
     assert response.status_code == 200
     assert response.json()["total"] == 100
 
     # 2. category_id 필터링 -> 식비 카테고리만 (50건)
-    response = auth_client.get(f"/transactions?category_id={my_category.id}")
+    response = auth_client.get(f"/api/transactions?category_id={my_category.id}")
     assert response.status_code == 200
     assert response.json()["total"] == 50
 
     # 3. keyword="점심" 검색 -> '점심' 단어 포함 지출만 (50건)
-    response = auth_client.get("/transactions?keyword=점심")
+    response = auth_client.get("/api/transactions?keyword=점심")
     assert response.status_code == 200
     assert response.json()["total"] == 50
 
     # 4. 복합 필터 (식비 + keyword="점심" + 금액 범위 1000~1020원)
     response = auth_client.get(
-        f"/transactions?category_id={my_category.id}&keyword=점심&amount_min=1000&amount_max=1020"
+        f"/api/transactions?category_id={my_category.id}&keyword=점심&amount_min=1000&amount_max=1020"
     )
     assert response.status_code == 200
     res_data = response.json()
@@ -114,7 +114,7 @@ def test_transactions_filters_and_keyword(auth_client, setup_hundred_transaction
     assert res_data["total"] == 11
     
     # 5. keyword="NONE" 검색 -> 빈 배열 및 total=0 반환
-    response = auth_client.get("/transactions?keyword=NONE")
+    response = auth_client.get("/api/transactions?keyword=NONE")
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["total"] == 0
@@ -204,23 +204,23 @@ def test_goal_contributing_transactions_pagination(auth_client, db, test_user, m
 
 def test_transactions_empty_keyword(auth_client, setup_hundred_transactions):
     # 빈 keyword="" 전달 시, description 필터링 없이 전체 100건이 조회되는지 검증
-    response = auth_client.get("/transactions?keyword=")
+    response = auth_client.get("/api/transactions?keyword=")
     assert response.status_code == 200
     assert response.json()["total"] == 100
 
     # 공백만 있는 keyword="   " 전달 시에도 전체 100건이 조회되는지 검증
-    response_spaces = auth_client.get("/transactions?keyword=%20%20%20")
+    response_spaces = auth_client.get("/api/transactions?keyword=%20%20%20")
     assert response_spaces.status_code == 200
     assert response_spaces.json()["total"] == 100
 
 
 def test_transactions_contradictory_filters_error_400(auth_client):
     # 1. date_from > date_to 모순 입력 시 -> 400 Bad Request
-    response = auth_client.get("/transactions?date_from=2026-05-10&date_to=2026-05-01")
+    response = auth_client.get("/api/transactions?date_from=2026-05-10&date_to=2026-05-01")
     assert response.status_code == 400
     assert "date_from은 date_to보다 이전이어야 합니다" in response.json()["detail"]
 
     # 2. amount_min > amount_max 모순 입력 시 -> 400 Bad Request
-    response = auth_client.get("/transactions?amount_min=5000&amount_max=1000")
+    response = auth_client.get("/api/transactions?amount_min=5000&amount_max=1000")
     assert response.status_code == 400
     assert "amount_min은 amount_max보다 작거나 같아야 합니다" in response.json()["detail"]

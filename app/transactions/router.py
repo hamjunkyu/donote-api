@@ -12,7 +12,7 @@ from app.shared.schemas import PaginatedResponse
 from . import schemas, service
 
 
-router = APIRouter(prefix="/transactions", tags=["Transactions"])
+router = APIRouter(prefix="/api/transactions", tags=["Transactions"])
 
 
 @router.post("/", response_model=schemas.TransactionResponse, status_code=status.HTTP_201_CREATED)
