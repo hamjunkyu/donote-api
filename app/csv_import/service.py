@@ -30,10 +30,14 @@ def parse_csv_content(decoded_content: str) -> Iterator[CSVRowData]:
         except ValueError:
             amount = 0.0
 
+        # 유형: 한글(수입/지출)·영문(INCOME/EXPENSE) 모두 허용 → 영문으로 통일
+        type_raw = row.get("유형", "EXPENSE").strip()
+        type_value = {"수입": "INCOME", "지출": "EXPENSE"}.get(type_raw, type_raw.upper())
+
         yield CSVRowData(
             row_number=index,
             transaction_date=row.get("날짜", "").strip(),
-            type=row.get("유형", "EXPENSE").strip().upper(),
+            type=type_value,
             category=row.get("카테고리", "").strip(),
             amount=amount,
             memo=row.get("메모", "").strip()
