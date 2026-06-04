@@ -24,7 +24,7 @@ def expense_category(db, test_user):
 # ---------- 스키마 검증 / 카테고리 소유권 ----------
 
 def test_create_transaction_success(auth_client, expense_category):
-    res = auth_client.post("/transactions/", json={
+    res = auth_client.post("/api/transactions/", json={
         "type": "EXPENSE",
         "amount": 15000,
         "category_id": str(expense_category.id),
@@ -40,7 +40,7 @@ def test_create_transaction_success(auth_client, expense_category):
 
 
 def test_create_amount_zero_rejected(auth_client, expense_category):
-    res = auth_client.post("/transactions/", json={
+    res = auth_client.post("/api/transactions/", json={
         "type": "EXPENSE",
         "amount": 0,
         "category_id": str(expense_category.id),
@@ -50,7 +50,7 @@ def test_create_amount_zero_rejected(auth_client, expense_category):
 
 
 def test_create_invalid_type_rejected(auth_client, expense_category):
-    res = auth_client.post("/transactions/", json={
+    res = auth_client.post("/api/transactions/", json={
         "type": "WRONG",
         "amount": 1000,
         "category_id": str(expense_category.id),
@@ -74,7 +74,7 @@ def test_create_with_others_category_forbidden(auth_client, db):
     db.add(other_category)
     db.commit()
 
-    res = auth_client.post("/transactions/", json={
+    res = auth_client.post("/api/transactions/", json={
         "type": "EXPENSE",
         "amount": 1000,
         "category_id": str(other_category.id),
@@ -84,7 +84,7 @@ def test_create_with_others_category_forbidden(auth_client, db):
 
 
 def test_update_with_others_category_forbidden(auth_client, db, test_user, expense_category):
-    res = auth_client.post("/transactions/", json={
+    res = auth_client.post("/api/transactions/", json={
         "type": "EXPENSE",
         "amount": 1000,
         "category_id": str(expense_category.id),
@@ -106,7 +106,7 @@ def test_update_with_others_category_forbidden(auth_client, db, test_user, expen
     db.add(other_category)
     db.commit()
 
-    res = auth_client.patch(f"/transactions/{txn_id}", json={
+    res = auth_client.patch(f"/api/transactions/{txn_id}", json={
         "category_id": str(other_category.id),
     })
     assert res.status_code == 403
@@ -128,7 +128,7 @@ def test_delete_transaction_resets_goal(auth_client, db, test_user, expense_cate
     db.commit()
 
     # 100000 지출 → 목표 100% → ACHIEVED
-    res = auth_client.post("/transactions/", json={
+    res = auth_client.post("/api/transactions/", json={
         "type": "EXPENSE",
         "amount": 100000,
         "category_id": str(expense_category.id),
@@ -142,7 +142,7 @@ def test_delete_transaction_resets_goal(auth_client, db, test_user, expense_cate
     assert goal.is_achieved_notified is True
 
     # 거래 삭제 → goal hook 재평가 → 0% → 복구
-    res = auth_client.delete(f"/transactions/{txn_id}")
+    res = auth_client.delete(f"/api/transactions/{txn_id}")
     assert res.status_code == 200
 
     db.refresh(goal)
@@ -192,7 +192,7 @@ def expense_with_settlement(db, test_user, expense_category):
 
 def test_update_amount_cascade_equal(auth_client, db, expense_with_settlement):
     txn, settlement, parts = expense_with_settlement
-    res = auth_client.patch(f"/transactions/{txn.id}", json={"amount": 60000})
+    res = auth_client.patch(f"/api/transactions/{txn.id}", json={"amount": 60000})
     assert res.status_code == 200
     db.refresh(settlement)
     assert int(settlement.total_amount) == 60000
@@ -207,7 +207,7 @@ def test_update_amount_keeps_settled_participant(auth_client, db, expense_with_s
     p1.status = "SETTLED"
     db.commit()
 
-    res = auth_client.patch(f"/transactions/{txn.id}", json={"amount": 60000})
+    res = auth_client.patch(f"/api/transactions/{txn.id}", json={"amount": 60000})
     assert res.status_code == 200
     db.refresh(p1)
     db.refresh(p2)
@@ -221,13 +221,13 @@ def test_update_amount_below_settled_blocked(auth_client, db, expense_with_settl
         p.status = "SETTLED"
     db.commit()  # settled 합계 20000
 
-    res = auth_client.patch(f"/transactions/{txn.id}", json={"amount": 15000})
+    res = auth_client.patch(f"/api/transactions/{txn.id}", json={"amount": 15000})
     assert res.status_code == 400
 
 
 def test_update_type_change_with_settlement_blocked(auth_client, expense_with_settlement):
     txn, *_ = expense_with_settlement
-    res = auth_client.patch(f"/transactions/{txn.id}", json={"type": "INCOME"})
+    res = auth_client.patch(f"/api/transactions/{txn.id}", json={"type": "INCOME"})
     assert res.status_code == 400
 
 
@@ -238,7 +238,7 @@ def test_update_completed_settlement_blocked(auth_client, db, expense_with_settl
     settlement.status = "COMPLETED"
     db.commit()
 
-    res = auth_client.patch(f"/transactions/{txn.id}", json={"amount": 60000})
+    res = auth_client.patch(f"/api/transactions/{txn.id}", json={"amount": 60000})
     assert res.status_code == 400
 
 
@@ -246,7 +246,7 @@ def test_delete_transaction_cascades_settlement(auth_client, db, expense_with_se
     txn, settlement, parts = expense_with_settlement
     settlement_id = settlement.id
 
-    res = auth_client.delete(f"/transactions/{txn.id}")
+    res = auth_client.delete(f"/api/transactions/{txn.id}")
     assert res.status_code == 200
 
     assert db.get(Settlement, settlement_id) is None
