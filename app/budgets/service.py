@@ -13,6 +13,7 @@ from app.transactions.models import Transaction
 from app.transactions.helpers import actual_spent_subquery
 from app.categories.models import Category
 from app.notifications.service import create_notification
+from app.notifications.constants import NotificationType
 
 
 def upsert_budget(db: Session, user_id: uuid.UUID, year_month: str, amount: float, category_id: Optional[uuid.UUID] = None) -> Budget:
@@ -227,7 +228,7 @@ def check_and_notify_budget_threshold(
                     if budget.category_id is None
                     else f"이번달 {label} 예산이 100% 사용되었습니다. (예산: {amount:,.0f}원)"
                 )
-                create_notification(db, user_id, "BUDGET_EXCEEDED", msg, commit=False)
+                create_notification(db, user_id, NotificationType.BUDGET_EXCEEDED, msg, commit=False)
                 budget.is_exceeded_notified = True
         else:
             # 100% 아래로 떨어지면 리셋 (재발화 가능)
@@ -242,7 +243,7 @@ def check_and_notify_budget_threshold(
                     if budget.category_id is None
                     else f"이번달 {label} 예산이 80% 사용되었습니다."
                 )
-                create_notification(db, user_id, "BUDGET_WARNING", msg, commit=False)
+                create_notification(db, user_id, NotificationType.BUDGET_WARNING, msg, commit=False)
                 budget.is_warning_notified = True
         else:
             # 80% 아래로 떨어지면 리셋 (재발화 가능)

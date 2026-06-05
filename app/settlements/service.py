@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.models import User
 from app.notifications.service import create_notification
+from app.notifications.constants import NotificationType
 from app.transactions import models as transaction_models
 
 from . import models, schemas
@@ -165,7 +166,7 @@ def add_participant(
         create_notification(
             db,
             participant.user_id,
-            "SETTLEMENT_REQUEST",
+            NotificationType.SETTLEMENT_REQUEST,
             message,
         )
 
@@ -379,7 +380,7 @@ def mark_settlement_complete(db: Session, settlement_id, current_user):
         create_notification(
             db,
             settlement.creator_id,
-            "SETTLEMENT_COMPLETED",
+            NotificationType.SETTLEMENT_COMPLETED,
             f"정산이 완료되었습니다 ({int(settlement.total_amount):,}원)",
         )
 
@@ -452,7 +453,7 @@ def mark_participant_settled(db: Session, settlement_id, participant_id, current
         create_notification(
             db,
             settlement.creator_id,
-            "SETTLEMENT_COMPLETED",
+            NotificationType.SETTLEMENT_COMPLETED,
             f"정산이 완료되었습니다 ({int(settlement.total_amount):,}원)",
         )
 

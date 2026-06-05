@@ -13,6 +13,7 @@ from app.categories.models import Category
 from app.goals.models import Goal
 from app.goals.schemas import GoalCreate, GoalUpdate
 from app.notifications.service import create_notification
+from app.notifications.constants import NotificationType
 from app.transactions.models import Transaction
 
 
@@ -530,7 +531,7 @@ def check_and_notify_goal_achievement(
                     create_notification(
                         db,
                         user_id,
-                        "GOAL_MILESTONE",
+                        NotificationType.GOAL_MILESTONE,
                         f"{goal.name} 목표 {pct}% 달성!",
                         commit=False,
                     )
@@ -546,7 +547,7 @@ def check_and_notify_goal_achievement(
                 create_notification(
                     db,
                     user_id,
-                    "GOAL_ACHIEVED",
+                    NotificationType.GOAL_ACHIEVED,
                     f"🎉 목표 달성! {goal.name}",
                     commit=False,
                 )
