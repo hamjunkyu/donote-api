@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, date, time
 
 from sqlalchemy import (
-    String, Date, Time, DateTime, Numeric, Enum as SAEnum, ForeignKey,
+    String, Date, Time, DateTime, Numeric, Enum as SAEnum, ForeignKey, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,8 +31,8 @@ class Transaction(Base):
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
     transaction_time: Mapped[time | None] = mapped_column(Time)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )

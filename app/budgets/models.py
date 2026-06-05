@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import String, Numeric, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Numeric, ForeignKey, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -33,5 +33,9 @@ class Budget(Base):
         ForeignKey("categories.id")
     )
     amount: Mapped[float] = mapped_column(Numeric(12, 0), nullable=False)
-    is_warning_notified: Mapped[bool] = mapped_column(default=False)
-    is_exceeded_notified: Mapped[bool] = mapped_column(default=False)
+    is_warning_notified: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default=text("false")
+    )
+    is_exceeded_notified: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default=text("false")
+    )

@@ -118,6 +118,11 @@ def downgrade() -> None:
     op.drop_table('budgets')
     op.drop_table('import_hashes')
     op.drop_table('categories')
-    op.drop_table('users')
     op.drop_table('refresh_tokens')
+    op.drop_table('users')
     # ### end Alembic commands ###
+    op.execute('DROP TYPE settlement_status')
+    op.execute('DROP TYPE participant_status')
+    op.execute('DROP TYPE transaction_type')
+    op.execute('DROP TYPE category_type')
+    op.execute('DROP TYPE split_type')

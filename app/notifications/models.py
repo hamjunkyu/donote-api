@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, ForeignKey, DateTime, Boolean
+from sqlalchemy import String, ForeignKey, DateTime, Boolean, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -20,7 +20,9 @@ class Notification(Base):
     )
     type: Mapped[str] = mapped_column(String(50), nullable=False)  # 예: "BUDGET_WARNING", "BUDGET_EXCEEDED"
     message: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_read: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
