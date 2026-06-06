@@ -15,7 +15,6 @@ class GoalCreate(BaseModel):
     name: str = Field(max_length=100)
     target_amount: float = Field(gt=0)
     target_date: date | None = None
-    category_id: uuid.UUID
     description: str | None = Field(default=None, max_length=500)
 
 
@@ -25,7 +24,6 @@ class GoalUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     target_amount: float | None = Field(default=None, gt=0)
     target_date: date | None = None
-    category_id: uuid.UUID | None = None
     description: str | None = Field(default=None, max_length=500)
 
 
@@ -37,7 +35,6 @@ class GoalResponse(BaseModel):
     name: str
     target_amount: float
     target_date: date | None
-    category_id: uuid.UUID
     description: str | None
     status: str
     created_at: datetime
@@ -45,6 +42,7 @@ class GoalResponse(BaseModel):
     current_amount: float
     progress_percentage: float
     remaining_amount: float
+    on_track: bool | None
 
     model_config = {"from_attributes": True}
 
@@ -52,6 +50,26 @@ class GoalResponse(BaseModel):
     @classmethod
     def cap_percentage(cls, v: float) -> float:
         return min(v, 100.0)
+
+
+class ContributionCreate(BaseModel):
+    """적립 생성 요청 스키마."""
+
+    amount: float = Field(gt=0)
+    memo: str | None = Field(default=None, max_length=200)
+    contributed_at: date | None = None
+
+
+class ContributionResponse(BaseModel):
+    """적립 응답 스키마."""
+
+    id: uuid.UUID
+    amount: float
+    memo: str | None
+    contributed_at: date
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class GoalProgressResponse(BaseModel):
@@ -69,18 +87,6 @@ class GoalProgressResponse(BaseModel):
     @classmethod
     def cap_percentage(cls, v: float) -> float:
         return min(v, 100.0)
-
-
-class ContributingTransactionResponse(BaseModel):
-    """저축 목표 기여 거래 응답 스키마."""
-
-    id: uuid.UUID
-    amount: float
-    description: str | None
-    transaction_date: date
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class GoalForecastResponse(BaseModel):

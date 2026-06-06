@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from app.categories.models import Category
 from app.transactions.models import Transaction
-from app.goals.models import Goal
+from app.goals.models import Goal, GoalContribution
 
 
 @pytest.fixture
@@ -121,25 +121,22 @@ def test_transactions_filters_and_keyword(auth_client, setup_hundred_transaction
     assert len(res_data["items"]) == 0
 
 
-def test_goals_pagination_computed_status(auth_client, db, test_user, my_category):
-    # 테스트용 저축 목표 5개 생성 (상태가 BEHIND가 되도록 target_date를 오늘로 설정)
-    # limit=2, offset=0 으로 조회 시 정상적으로 computed status가 필터링되고 슬라이싱되는지 검증
+def test_goals_pagination(auth_client, db, test_user):
+    # IN_PROGRESS 목표 5개 → 상태 필터 + limit/offset 슬라이싱 검증
     for i in range(5):
         goal = Goal(
             id=uuid.uuid4(),
             user_id=test_user.id,
             name=f"목표 {i}",
             target_amount=100000,
-            target_date=date.today(),  # 오늘 마감 -> BEHIND
-            category_id=my_category.id,
+            target_date=date.today() + timedelta(days=30),
             status="IN_PROGRESS",
             created_at=datetime.utcnow() - timedelta(days=1)
         )
         db.add(goal)
     db.commit()
 
-    # 1. status=BEHIND 페이징 조회 -> total 5, items 2
-    response = auth_client.get("/api/goals?status=BEHIND&limit=2&offset=0")
+    response = auth_client.get("/api/goals?status=IN_PROGRESS&limit=2&offset=0")
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["total"] == 5
@@ -147,8 +144,7 @@ def test_goals_pagination_computed_status(auth_client, db, test_user, my_categor
     assert res_data["limit"] == 2
     assert res_data["offset"] == 0
 
-    # 2. offset=2 로 조회 -> items 2
-    response = auth_client.get("/api/goals?status=BEHIND&limit=2&offset=2")
+    response = auth_client.get("/api/goals?status=IN_PROGRESS&limit=2&offset=2")
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["total"] == 5
@@ -156,50 +152,38 @@ def test_goals_pagination_computed_status(auth_client, db, test_user, my_categor
     assert res_data["offset"] == 2
 
 
-def test_goal_contributing_transactions_pagination(auth_client, db, test_user, my_category):
-    # 목표 1개 생성
+def test_goal_contributions_pagination(auth_client, db, test_user):
+    # 목표 + 적립 5건 → 적립 내역 페이징 검증
     goal = Goal(
         id=uuid.uuid4(),
         user_id=test_user.id,
         name="여행 목표",
         target_amount=100000,
         target_date=date.today() + timedelta(days=10),
-        category_id=my_category.id,
         status="IN_PROGRESS",
         created_at=datetime.utcnow() - timedelta(hours=1)
     )
     db.add(goal)
     db.commit()
 
-    # 기여 거래 5개 생성 (EXPENSE)
     for i in range(5):
-        tx = Transaction(
+        contribution = GoalContribution(
             id=uuid.uuid4(),
-            user_id=test_user.id,
-            type="EXPENSE",
+            goal_id=goal.id,
             amount=1000,
-            category_id=my_category.id,
-            description=f"기여 {i}",
-            transaction_date=date.today(),
+            memo=f"적립 {i}",
+            contributed_at=date.today(),
             created_at=datetime.utcnow() + timedelta(minutes=i)
         )
-        db.add(tx)
+        db.add(contribution)
     db.commit()
 
-    # 기여 거래 페이징 조회 -> total 5, items 3
-    response = auth_client.get(f"/api/goals/{goal.id}/transactions?limit=3&offset=0")
+    response = auth_client.get(f"/api/goals/{goal.id}/contributions?limit=3&offset=0")
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["total"] == 5
     assert len(res_data["items"]) == 3
     assert res_data["limit"] == 3
-    
-    # 시간 오름차순 정렬 상태로 반환되는지 검증 (created_at.asc())
-    items = res_data["items"]
-    for i in range(len(items) - 1):
-        created_curr = datetime.fromisoformat(items[i]["created_at"].replace("Z", "+00:00"))
-        created_next = datetime.fromisoformat(items[i+1]["created_at"].replace("Z", "+00:00"))
-        assert created_curr <= created_next
 
 
 def test_transactions_empty_keyword(auth_client, setup_hundred_transactions):

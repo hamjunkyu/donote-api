@@ -12,7 +12,6 @@ from app.auth.models import User
 from app.categories.models import Category
 from app.settlements import service as settlement_service
 from app.budgets.service import check_and_notify_budget_threshold
-from app.goals.service import check_and_notify_goal_achievement
 
 
 def _validate_category(db: Session, category_id: uuid.UUID, user_id: uuid.UUID) -> Category:
@@ -60,33 +59,25 @@ def _notify_affected(
     db: Session,
     user_id: uuid.UUID,
     old_type: str | None,
-    old_category_id: uuid.UUID | None,
     old_date,
     transaction: models.Transaction,
     commit: bool = True,
 ) -> None:
-    """변경 전/후 EXPENSE 컨텍스트에 대해 budget/goal 알림 재평가.
+    """변경 전/후 EXPENSE 컨텍스트에 대해 budget 알림 재평가.
 
-    type EXPENSE→INCOME, category 변경, date 변경, amount 변경 모두
-    이전 카테고리/날짜와 새 카테고리/날짜 양쪽을 재평가 대상으로 수집.
+    type EXPENSE→INCOME, date 변경, amount 변경 모두
+    이전 날짜와 새 날짜 양쪽을 재평가 대상으로 수집.
     """
-    goal_categories: set = set()
     budget_dates: set = set()
 
     if old_type == "EXPENSE":
-        goal_categories.add(old_category_id)
         budget_dates.add(old_date)
     if transaction.type == "EXPENSE":
-        goal_categories.add(transaction.category_id)
         budget_dates.add(transaction.transaction_date)
 
-    # 락 순서를 모든 경로·워커에서 동일하게 고정해 동시 거래 간 데드락 방지.
-    # 자원 종류는 budget → goal (create/delete 와 동일), 같은 종류 안에서는 정렬 순.
-    # (date 해시는 프로세스마다 달라 정렬 없이는 멀티워커에서 순회 순서가 어긋날 수 있음)
+    # 동시 거래 간 데드락 방지를 위해 정렬된 순서로 처리.
     for transaction_date in sorted(budget_dates):
         check_and_notify_budget_threshold(db, user_id, transaction_date, commit=commit)
-    for category_id in sorted(goal_categories, key=str):
-        check_and_notify_goal_achievement(db, user_id, category_id, commit=commit)
 
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user: User) -> dict:
@@ -107,7 +98,6 @@ def create_transaction(db: Session, transaction: schemas.TransactionCreate, curr
 
     if db_transaction.type == "EXPENSE":
         check_and_notify_budget_threshold(db, current_user.id, db_transaction.transaction_date, commit=False)
-        check_and_notify_goal_achievement(db, current_user.id, db_transaction.category_id, commit=False)
 
     db.commit()
     db.refresh(db_transaction)
@@ -205,7 +195,6 @@ def update_transaction(
         return None
 
     old_type = transaction.type
-    old_category_id = transaction.category_id
     old_date = transaction.transaction_date
     old_amount = int(transaction.amount)
 
@@ -242,7 +231,7 @@ def update_transaction(
 
     db.flush()  # 변경 사항 반영. commit 은 알림까지 끝낸 뒤 한 번만.
 
-    _notify_affected(db, current_user.id, old_type, old_category_id, old_date, transaction, commit=False)
+    _notify_affected(db, current_user.id, old_type, old_date, transaction, commit=False)
 
     db.commit()
     db.refresh(transaction)
@@ -261,16 +250,14 @@ def delete_transaction(db: Session, transaction_id: uuid.UUID, current_user: Use
 
     # 연결된 정산은 FK CASCADE 로 자동 삭제 (거래 기록의 자유 원칙)
     was_expense = transaction.type == "EXPENSE"
-    category_id = transaction.category_id
     transaction_date = transaction.transaction_date
 
     db.delete(transaction)
     db.flush()  # FK CASCADE 로 연결 정산 삭제 반영. commit 은 알림 후 한 번만.
 
-    # 삭제로 누적 지출이 줄었으므로 영향받은 budget/goal 재평가
+    # 삭제로 누적 지출이 줄었으므로 영향받은 budget 재평가
     if was_expense:
         check_and_notify_budget_threshold(db, current_user.id, transaction_date, commit=False)
-        check_and_notify_goal_achievement(db, current_user.id, category_id, commit=False)
 
     db.commit()
 
