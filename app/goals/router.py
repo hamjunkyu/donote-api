@@ -188,6 +188,22 @@ def cancel_goal(
     return _map_goal_response(goal)
 
 
+@router.patch("/{goal_id}/reactivate", response_model=schemas.GoalResponse)
+def reactivate_goal(
+    goal_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """취소된 저축 목표를 다시 진행 상태로 되돌림 (적립 기록·진행률 복원)."""
+    goal = service.reactivate_goal(db, goal_id, current_user.id)
+    if not goal:
+        raise HTTPException(
+            status_code=404,
+            detail="목표를 찾을 수 없거나 재개할 수 없는 상태입니다",
+        )
+    return _map_goal_response(goal)
+
+
 @router.patch("/{goal_id}", response_model=schemas.GoalResponse)
 def update_goal(
     goal_id: uuid.UUID,
