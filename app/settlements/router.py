@@ -183,8 +183,6 @@ def mark_complete(
 ):
     """정산 전체 완료 처리. 모든 참여자가 SETTLED 여야 함."""
     result = service.mark_settlement_complete(db, settlement_id, current_user)
-    if result == "NOT_ALL_SETTLED":
-        raise HTTPException(status_code=400, detail="아직 완료되지 않은 참여자가 있습니다")
     if not result:
         raise HTTPException(status_code=404, detail="정산을 찾을 수 없습니다")
     return result
@@ -201,8 +199,6 @@ def revert_settlement(
 ):
     """COMPLETED 정산을 PENDING 으로 복원."""
     result = service.revert_completion(db, settlement_id, current_user)
-    if result == "NOT_COMPLETED":
-        raise HTTPException(status_code=400, detail="COMPLETED 상태가 아닙니다")
     if not result:
         raise HTTPException(status_code=404, detail="정산을 찾을 수 없습니다")
     return result
@@ -253,8 +249,6 @@ def revert_participant_settle(
 ):
     """참여자 SETTLED → PENDING 복원. COMPLETED 정산도 자동 PENDING 복귀."""
     result = service.revert_participant(db, settlement_id, participant_id, current_user)
-    if result == "NOT_SETTLED":
-        raise HTTPException(status_code=400, detail="SETTLED 상태가 아닙니다")
     if not result:
         raise HTTPException(status_code=404, detail="참여자를 찾을 수 없습니다")
     return result

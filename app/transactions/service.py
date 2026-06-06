@@ -3,8 +3,9 @@ import io
 import uuid
 from datetime import date
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
+
+from app.shared.exceptions import BadRequestError, ForbiddenError
 
 from . import models, schemas
 from .helpers import actual_spent_subquery
@@ -21,10 +22,7 @@ def _validate_category(db: Session, category_id: uuid.UUID, user_id: uuid.UUID) 
         (Category.user_id == None) | (Category.user_id == user_id),
     ).first()
     if not category:
-        raise HTTPException(
-            status_code=403,
-            detail="유효하지 않거나 권한이 없는 카테고리입니다",
-        )
+        raise ForbiddenError("유효하지 않거나 권한이 없는 카테고리입니다")
     return category
 
 
@@ -205,10 +203,7 @@ def update_transaction(
         and old_type == "EXPENSE"
         and settlement_service.get_active_settlement_by_transaction(db, transaction.id)
     ):
-        raise HTTPException(
-            status_code=400,
-            detail="정산이 연결된 거래는 유형을 변경할 수 없습니다. 정산을 먼저 취소하세요",
-        )
+        raise BadRequestError("정산이 연결된 거래는 유형을 변경할 수 없습니다. 정산을 먼저 취소하세요")
 
     if transaction_update.category_id is not None and transaction_update.category_id != transaction.category_id:
         _validate_category(db, transaction_update.category_id, current_user.id)

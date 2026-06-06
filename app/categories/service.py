@@ -6,6 +6,7 @@ from typing import Sequence, Optional
 
 from .models import Category
 from .schemas import CategoryCreate, CategoryUpdate
+from app.shared.exceptions import ConflictError
 
 def init_default_categories(db: Session) -> None:
     """
@@ -97,5 +98,5 @@ def delete_category(db: Session, user_id: UUID, category_id: UUID) -> bool:
         return True
     except IntegrityError:
         db.rollback()
-        # 사용 중인 카테고리 삭제 시도 시 ValueError 발생
-        raise ValueError("CATEGORY_IN_USE") 
+        # 사용 중인 카테고리(거래/예산/목표 참조)는 삭제 불가
+        raise ConflictError("사용 중인 카테고리는 삭제할 수 없습니다.") 

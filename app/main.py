@@ -3,10 +3,12 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.shared.exceptions import DomainException
 from app.auth.router import router as auth_router
 from app.budgets.router import router as budgets_router
 from app.categories.router import router as categories_router
@@ -53,6 +55,13 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.exception_handler(DomainException)
+async def domain_exception_handler(request: Request, exc: DomainException):
+    """도메인 예외를 HTTPException 과 동일한 {"detail": ...} 형식으로 변환."""
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 
 app.include_router(auth_router)
 app.include_router(transactions_router)

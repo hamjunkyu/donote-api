@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import HTTPException
+from app.shared.exceptions import BadRequestError, ConflictError, DomainException
 from sqlalchemy.orm import Session
 
 from app.auth.models import User
@@ -35,15 +35,9 @@ def _get_owned_settlement(db: Session, settlement_id, current_user) -> Optional[
 def _ensure_modifiable(settlement: models.Settlement) -> None:
     """COMPLETED 정산 수정 차단."""
     if settlement.status == "COMPLETED":
-        raise HTTPException(
-            status_code=400,
-            detail="완료된 정산은 수정할 수 없습니다",
-        )
+        raise BadRequestError("완료된 정산은 수정할 수 없습니다")
     if settlement.status == "CANCELLED":
-        raise HTTPException(
-            status_code=400,
-            detail="취소된 정산은 수정할 수 없습니다",
-        )
+        raise BadRequestError("취소된 정산은 수정할 수 없습니다")
 
 
 def _validate_creator_share(db: Session, settlement_id) -> None:
@@ -61,10 +55,7 @@ def _validate_creator_share(db: Session, settlement_id) -> None:
         ).all()
     )
     if total_participants > int(settlement.total_amount):
-        raise HTTPException(
-            status_code=400,
-            detail=f"참여자 합계({total_participants})가 총액({int(settlement.total_amount)})을 초과합니다",
-        )
+        raise BadRequestError(f"참여자 합계({total_participants})가 총액({int(settlement.total_amount)})을 초과합니다")
 
 
 def create_settlement(db: Session, settlement: schemas.SettlementCreate, current_user) -> Optional[models.Settlement]:
@@ -78,20 +69,14 @@ def create_settlement(db: Session, settlement: schemas.SettlementCreate, current
         return None
 
     if transaction.type != "EXPENSE":
-        raise HTTPException(
-            status_code=400,
-            detail="지출(EXPENSE) 거래만 정산 생성 가능합니다",
-        )
+        raise BadRequestError("지출(EXPENSE) 거래만 정산 생성 가능합니다")
 
     # 이미 정산 있는지 체크 (Settlement.transaction_id 는 UNIQUE)
     existing = db.query(models.Settlement).filter(
         models.Settlement.transaction_id == transaction.id
     ).first()
     if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="이 거래에 이미 정산이 존재합니다",
-        )
+        raise ConflictError("이 거래에 이미 정산이 존재합니다")
 
     db_settlement = models.Settlement(
         transaction_id=transaction.id,
@@ -119,10 +104,7 @@ def add_participant(
 
     # 본인 추가 불가
     if participant.user_id == current_user.id:
-        raise HTTPException(
-            status_code=400,
-            detail="본인을 참여자로 추가할 수 없습니다 (creator 몫은 자동 계산됨)",
-        )
+        raise BadRequestError("본인을 참여자로 추가할 수 없습니다 (creator 몫은 자동 계산됨)")
 
     # 같은 user_id 중복 추가 불가 (회원만 체크 — 비회원은 display_name 중복 허용)
     if participant.user_id is not None:
@@ -131,10 +113,7 @@ def add_participant(
             models.SettlementParticipant.user_id == participant.user_id,
         ).first()
         if existing:
-            raise HTTPException(
-                status_code=400,
-                detail="이미 추가된 참여자입니다",
-            )
+            raise BadRequestError("이미 추가된 참여자입니다")
 
     new_participant = models.SettlementParticipant(
         settlement_id=settlement_id,
@@ -149,7 +128,7 @@ def add_participant(
     # 내 몫 검증 (새 참여자 amount 포함). 실패 시 flush 된 참여자를 롤백한다.
     try:
         _validate_creator_share(db, settlement_id)
-    except HTTPException:
+    except DomainException:
         db.rollback()
         raise
 
@@ -195,19 +174,13 @@ def split_equal(
     ).all()
 
     if not participants:
-        raise HTTPException(
-            status_code=400,
-            detail="참여자가 없습니다",
-        )
+        raise BadRequestError("참여자가 없습니다")
 
     # SETTLED 참여자는 수정 차단 (재분배 영향). 단, 고정 참여자에 포함된 경우는 OK (금액 유지)
     fixed_set = set(fixed_participant_ids or [])
     settled_unfixed = [p for p in participants if p.status == "SETTLED" and p.id not in fixed_set]
     if settled_unfixed:
-        raise HTTPException(
-            status_code=400,
-            detail="SETTLED 참여자가 있어 재분배 불가. revert 후 다시 시도하세요",
-        )
+        raise BadRequestError("SETTLED 참여자가 있어 재분배 불가. revert 후 다시 시도하세요")
 
     total = int(settlement.total_amount)
 
@@ -219,10 +192,7 @@ def split_equal(
     remaining_pool = total - fixed_total
 
     if remaining_pool < 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"고정 참여자 합계({fixed_total})가 총액({total})을 초과합니다",
-        )
+        raise BadRequestError(f"고정 참여자 합계({fixed_total})가 총액({total})을 초과합니다")
 
     n_remaining = len(remaining) + 1  # creator 포함
     per_person = remaining_pool // n_remaining if n_remaining > 0 else 0
@@ -251,10 +221,7 @@ def split_custom(
     ).all()
 
     if not participants:
-        raise HTTPException(
-            status_code=400,
-            detail="참여자가 없습니다",
-        )
+        raise BadRequestError("참여자가 없습니다")
 
     participant_map = {p.id: p for p in participants}
 
@@ -262,15 +229,9 @@ def split_custom(
     for item in split_data.splits:
         target = participant_map.get(item.participant_id)
         if not target:
-            raise HTTPException(
-                status_code=400,
-                detail=f"존재하지 않는 참여자: {item.participant_id}",
-            )
+            raise BadRequestError(f"존재하지 않는 참여자: {item.participant_id}")
         if target.status == "SETTLED" and int(target.amount) != item.amount:
-            raise HTTPException(
-                status_code=400,
-                detail="SETTLED 참여자의 amount는 수정할 수 없습니다. revert 후 시도하세요",
-            )
+            raise BadRequestError("SETTLED 참여자의 amount는 수정할 수 없습니다. revert 후 시도하세요")
 
     # amount 적용
     for item in split_data.splits:
@@ -362,13 +323,10 @@ def mark_settlement_complete(db: Session, settlement_id, current_user):
     ).all()
 
     if not participants:
-        raise HTTPException(
-            status_code=400,
-            detail="참여자가 없습니다",
-        )
+        raise BadRequestError("참여자가 없습니다")
 
     if any(p.status != "SETTLED" for p in participants):
-        return "NOT_ALL_SETTLED"
+        raise BadRequestError("아직 완료되지 않은 참여자가 있습니다")
 
     was_already_completed = settlement.status == "COMPLETED"
     settlement.status = "COMPLETED"
@@ -394,7 +352,7 @@ def revert_completion(db: Session, settlement_id, current_user):
         return None
 
     if settlement.status != "COMPLETED":
-        return "NOT_COMPLETED"
+        raise BadRequestError("COMPLETED 상태가 아닙니다")
 
     settlement.status = "PENDING"
 
@@ -427,10 +385,7 @@ def mark_participant_settled(db: Session, settlement_id, participant_id, current
         return None
 
     if settlement.status != "PENDING":
-        raise HTTPException(
-            status_code=400,
-            detail=f"{settlement.status} 정산의 참여자는 수정할 수 없습니다",
-        )
+        raise BadRequestError(f"{settlement.status} 정산의 참여자는 수정할 수 없습니다")
 
     participant.status = "SETTLED"
     participant.settled_at = datetime.utcnow()
@@ -483,7 +438,7 @@ def revert_participant(db: Session, settlement_id, participant_id, current_user)
         return None
 
     if participant.status != "SETTLED":
-        return "NOT_SETTLED"
+        raise BadRequestError("SETTLED 상태가 아닙니다")
 
     participant.status = "PENDING"
     participant.settled_at = None
@@ -528,10 +483,7 @@ def remove_participant(db: Session, settlement_id, participant_id, current_user)
         return None
 
     if participant.status == "SETTLED":
-        raise HTTPException(
-            status_code=400,
-            detail="송금 완료된 참여자는 제거할 수 없습니다. revert 후 시도하세요",
-        )
+        raise BadRequestError("송금 완료된 참여자는 제거할 수 없습니다. revert 후 시도하세요")
 
     db.delete(participant)
     db.commit()
@@ -587,10 +539,7 @@ def delete_settlement(db: Session, settlement_id, current_user):
         return None
 
     if settlement.status == "COMPLETED":
-        raise HTTPException(
-            status_code=400,
-            detail="완료된 정산은 삭제할 수 없습니다. revert 후 시도하세요",
-        )
+        raise BadRequestError("완료된 정산은 삭제할 수 없습니다. revert 후 시도하세요")
 
     db.delete(settlement)
     db.commit()
@@ -612,10 +561,7 @@ def cancel_settlement(db: Session, settlement_id, current_user):
         return settlement
 
     if settlement.status == "COMPLETED":
-        raise HTTPException(
-            status_code=400,
-            detail="완료된 정산은 취소할 수 없습니다. revert 후 시도하세요",
-        )
+        raise BadRequestError("완료된 정산은 취소할 수 없습니다. revert 후 시도하세요")
 
     settlement.status = "CANCELLED"
 
@@ -655,10 +601,7 @@ def update_settlement_total(db: Session, transaction_id, new_amount: int) -> Non
         return
 
     if settlement.status == "COMPLETED":
-        raise HTTPException(
-            status_code=400,
-            detail="완료된 정산이 연결된 거래는 금액을 변경할 수 없습니다. revert 후 시도하세요",
-        )
+        raise BadRequestError("완료된 정산이 연결된 거래는 금액을 변경할 수 없습니다. revert 후 시도하세요")
 
     settlement.total_amount = new_amount
 
@@ -671,10 +614,7 @@ def update_settlement_total(db: Session, transaction_id, new_amount: int) -> Non
         non_settled = [p for p in participants if p.status != "SETTLED"]
         remaining_pool = new_amount - settled_total
         if remaining_pool < 0:
-            raise HTTPException(
-                status_code=400,
-                detail="이미 정산된 금액보다 작게 변경할 수 없습니다",
-            )
+            raise BadRequestError("이미 정산된 금액보다 작게 변경할 수 없습니다")
         n_remaining = len(non_settled) + 1  # creator 포함
         per_person = remaining_pool // n_remaining
         for p in non_settled:

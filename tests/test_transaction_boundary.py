@@ -2,9 +2,9 @@ import uuid
 from datetime import date
 
 import pytest
-from fastapi import HTTPException
 
 from app.config import Settings
+from app.shared.exceptions import BadRequestError
 from app.categories.models import Category
 from app.transactions.models import Transaction
 from app.settlements.models import Settlement, SettlementParticipant
@@ -60,7 +60,7 @@ def test_add_participant_rollback_on_invalid_share(db, test_user):
     db.commit()
 
     # 참여자 amount(15000) > total(10000) → creator 몫 음수 → 400
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(BadRequestError) as exc:
         settlement_service.add_participant(
             db,
             settlement.id,
