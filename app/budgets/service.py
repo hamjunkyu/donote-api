@@ -6,7 +6,7 @@ from datetime import datetime, date
 from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException
+from app.shared.exceptions import NotFoundError, ForbiddenError
 
 from app.budgets.models import Budget
 from app.transactions.models import Transaction
@@ -22,9 +22,9 @@ def upsert_budget(db: Session, user_id: uuid.UUID, year_month: str, amount: floa
     if category_id:
         category = db.get(Category, category_id)
         if not category:
-            raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다.")
+            raise NotFoundError("카테고리를 찾을 수 없습니다.")
         if category.user_id is not None and category.user_id != user_id:
-            raise HTTPException(status_code=403, detail="해당 카테고리에 대한 권한이 없습니다.")
+            raise ForbiddenError("해당 카테고리에 대한 권한이 없습니다.")
 
     # 2. upsert 로직 (try/except + retry 패턴으로 Race Condition 완벽 대응)
     # category_id가 NULL인 경우 PostgreSQL Unique 제약조건의 NULL distinct 동작 방어 포함

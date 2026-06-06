@@ -62,15 +62,7 @@ def delete_category(
     사용자 정의 카테고리를 삭제합니다.
     시스템 기본 카테고리이거나 본인 소유가 아니면 403, 사용 중이면 409를 반환합니다.
     """
-    try:
-        success = service.delete_category(db, current_user.id, category_id)
-    except ValueError as e:
-        if str(e) == "CATEGORY_IN_USE":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="사용 중인 카테고리는 삭제할 수 없습니다.",
-            )
-        raise
+    success = service.delete_category(db, current_user.id, category_id)
 
     if not success:
         raise HTTPException(
