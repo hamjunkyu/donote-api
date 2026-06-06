@@ -503,6 +503,32 @@ def cancel_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> dict | N
     return _to_goal_dto(goal, current_amount, "CANCELLED")
 
 
+def reactivate_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> dict | None:
+    """취소된 목표를 다시 진행 상태로 되돌린다.
+
+    CANCELLED 종료 상태를 해제한 뒤 적립 합계·마감일 기준으로 상태를 재판정한다
+    (적립이 목표 이상이면 ACHIEVED, 마감일이 지났으면 EXPIRED, 그 외 IN_PROGRESS).
+    취소 시 적립 기록은 보존되므로 재개하면 누적 진행률이 그대로 복원된다.
+    반환: None=목표 없음 또는 취소 상태가 아님(재개 불가).
+    """
+    goal = (
+        db.query(Goal)
+        .filter(Goal.id == goal_id, Goal.user_id == user_id)
+        .first()
+    )
+    if not goal or goal.status != "CANCELLED":
+        return None
+
+    goal.status = "IN_PROGRESS"
+    db.flush()
+    check_and_notify_goal(db, goal_id, user_id, commit=True)
+    db.refresh(goal)
+
+    current_amount = calculate_progress(db, goal)
+    computed_status = _sync_status(db, goal, current_amount)
+    return _to_goal_dto(goal, current_amount, computed_status)
+
+
 def delete_goal(db: Session, goal_id: uuid.UUID, user_id: uuid.UUID) -> dict | None:
     """저축 목표를 영구 삭제한다 (적립은 FK CASCADE 로 함께 삭제)."""
     goal = (

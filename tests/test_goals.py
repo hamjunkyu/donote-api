@@ -113,3 +113,60 @@ def test_contribution_on_missing_goal_returns_404(auth_client, test_user):
     missing = uuid.uuid4()
     r = auth_client.post(f"/api/goals/{missing}/contributions", json={"amount": 1000})
     assert r.status_code == 404
+
+
+def test_cancel_then_reactivate_restores_progress(auth_client, test_user):
+    """목표를 취소해도 적립은 보존되고, 재개하면 진행률이 그대로 복원된다."""
+    goal_id = auth_client.post("/api/goals/", json={
+        "name": "노트북", "target_amount": 100000,
+    }).json()["id"]
+    auth_client.post(f"/api/goals/{goal_id}/contributions", json={"amount": 40000})
+
+    # 취소 → CANCELLED, 적립 기록은 유지
+    cancel = auth_client.patch(f"/api/goals/{goal_id}/cancel")
+    assert cancel.status_code == 200
+    assert cancel.json()["status"] == "CANCELLED"
+    assert auth_client.get(f"/api/goals/{goal_id}/contributions").json()["total"] == 1
+
+    # 재개 → 적립 기준으로 상태 재판정, 진행률 복원
+    react = auth_client.patch(f"/api/goals/{goal_id}/reactivate")
+    assert react.status_code == 200
+    body = react.json()
+    assert body["status"] == "IN_PROGRESS"
+    assert body["current_amount"] == 40000
+    assert body["progress_percentage"] == 40
+
+    # 재개된 목표는 정상 동작: 100% 적립 시 달성
+    auth_client.post(f"/api/goals/{goal_id}/contributions", json={"amount": 60000})
+    assert auth_client.get(f"/api/goals/{goal_id}").json()["status"] == "ACHIEVED"
+
+
+def test_reactivate_recomputes_expired_status(auth_client, test_user):
+    """마감일이 지난 목표는 재개 시 IN_PROGRESS 가 아니라 EXPIRED 로 재판정된다."""
+    # 마감일은 UTC 기준 비교이고 로컬 날짜가 UTC 보다 최대 1일 앞설 수 있으므로
+    # timezone 무관하게 과거가 되도록 2일 마진을 둔다.
+    goal_id = auth_client.post("/api/goals/", json={
+        "name": "지난목표",
+        "target_amount": 100000,
+        "target_date": str(date.today() - timedelta(days=2)),
+    }).json()["id"]
+
+    assert auth_client.patch(f"/api/goals/{goal_id}/cancel").json()["status"] == "CANCELLED"
+    react = auth_client.patch(f"/api/goals/{goal_id}/reactivate")
+    assert react.status_code == 200
+    assert react.json()["status"] == "EXPIRED"
+
+
+def test_reactivate_non_cancelled_returns_404(auth_client, test_user):
+    """취소 상태가 아닌 목표는 재개할 수 없다."""
+    goal_id = auth_client.post("/api/goals/", json={
+        "name": "여행", "target_amount": 50000,
+    }).json()["id"]
+    r = auth_client.patch(f"/api/goals/{goal_id}/reactivate")
+    assert r.status_code == 404
+
+
+def test_reactivate_missing_goal_returns_404(auth_client, test_user):
+    missing = uuid.uuid4()
+    r = auth_client.patch(f"/api/goals/{missing}/reactivate")
+    assert r.status_code == 404
