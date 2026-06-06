@@ -79,7 +79,9 @@ def _notify_affected(
 
 
 def create_transaction(db: Session, transaction: schemas.TransactionCreate, current_user: User) -> dict:
-    _validate_category(db, transaction.category_id, current_user.id)
+    category = _validate_category(db, transaction.category_id, current_user.id)
+    if category.type != transaction.type:
+        raise BadRequestError("카테고리 타입이 거래 타입과 일치하지 않습니다")
 
     db_transaction = models.Transaction(
         user_id=current_user.id,
@@ -219,6 +221,12 @@ def update_transaction(
         transaction.transaction_date = transaction_update.transaction_date
     if transaction_update.transaction_time is not None:
         transaction.transaction_time = transaction_update.transaction_time
+
+    # type 또는 category 변경 시 최종 카테고리 타입과 거래 타입 일치 검증
+    if transaction_update.type is not None or transaction_update.category_id is not None:
+        category = db.get(Category, transaction.category_id)
+        if category and category.type != transaction.type:
+            raise BadRequestError("카테고리 타입이 거래 타입과 일치하지 않습니다")
 
     # amount 변경 시 연결된 정산 total + 참여자 재분배 (creator 몫 < 0 이면 400)
     if transaction_update.amount is not None and int(transaction_update.amount) != old_amount:

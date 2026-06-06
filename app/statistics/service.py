@@ -10,7 +10,7 @@ def get_period_summary(db: Session, user_id: str, period: str, date_from: date, 
     if period == "daily":
         group_expr = func.to_char(Transaction.transaction_date, 'YYYY-MM-DD')
     elif period == "weekly":
-        group_expr = func.to_char(func.date_trunc('week', Transaction.transaction_date), 'YYYY-"W"IW')
+        group_expr = func.to_char(func.date_trunc('week', Transaction.transaction_date), 'IYYY-"W"IW')
     elif period == "monthly":
         group_expr = func.to_char(Transaction.transaction_date, 'YYYY-MM')
     else:

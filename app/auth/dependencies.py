@@ -14,11 +14,11 @@ from app.database import get_db
 from app.auth.service import verify_token, get_user_by_id
 from app.auth.models import User
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
     """Authorization 헤더에서 현재 사용자를 추출하고 검증한다.
@@ -37,6 +37,12 @@ def get_current_user(
         HTTPException: 토큰이 유효하지 않거나 만료됐거나
             사용자를 찾을 수 없는 경우 401 반환.
     """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="인증 정보가 없습니다",
+        )
+
     token = credentials.credentials
     payload = verify_token(token)
 

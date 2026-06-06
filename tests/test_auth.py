@@ -33,9 +33,9 @@ def test_signup_login_flow(client):
 
 
 def test_signup_rejects_too_long_password(client):
-    """128자 초과 비밀번호 → 422 (bcrypt 입력 폭주 방지)."""
+    """72바이트 초과 비밀번호 → 422 (bcrypt 72바이트 한계)."""
     email = f"u_{uuid.uuid4().hex[:6]}@example.com"
-    long_pw = "a1" * 70  # 140자, 영문+숫자 충족하지만 길이 초과
+    long_pw = "a1" * 70  # 140바이트, 영문+숫자 충족하지만 한계 초과
     r = client.post("/api/auth/signup", json={
         "email": email, "password": long_pw,
         "password_confirm": long_pw, "name": "테스터",
@@ -44,7 +44,7 @@ def test_signup_rejects_too_long_password(client):
 
 
 def test_password_change_rejects_too_long_password(auth_client):
-    """비밀번호 변경 시 128자 초과 → 422 (요청 검증 단계)."""
+    """비밀번호 변경 시 72바이트 초과 → 422 (요청 검증 단계)."""
     long_pw = "a1" * 70
     r = auth_client.put("/api/auth/password", json={
         "current_password": "whatever",
@@ -52,6 +52,39 @@ def test_password_change_rejects_too_long_password(auth_client):
         "new_password_confirm": long_pw,
     })
     assert r.status_code == 422
+
+
+def test_signup_rejects_password_over_72_bytes_korean(client):
+    """글자 수는 128자 이하지만 UTF-8 72바이트를 넘는 비밀번호 → 422 (bcrypt 500 방지).
+
+    한글 1자 = 3바이트. 31자(=93바이트)는 글자 수 제한은 통과하지만 바이트 한계 초과.
+    """
+    email = f"u_{uuid.uuid4().hex[:6]}@example.com"
+    pw = "가" * 30 + "1"  # 31자, 91바이트, 영문/숫자 규칙상 한글(letter)+숫자 충족
+    r = client.post("/api/auth/signup", json={
+        "email": email, "password": pw,
+        "password_confirm": pw, "name": "테스터",
+    })
+    assert r.status_code == 422
+
+
+def test_login_with_over_72_byte_password_returns_401(client):
+    """72바이트 초과 비밀번호로 로그인 시도 → 401 (verify_password 가 500 대신 False)."""
+    email = f"u_{uuid.uuid4().hex[:6]}@example.com"
+    client.post("/api/auth/signup", json={
+        "email": email, "password": "pass1234",
+        "password_confirm": "pass1234", "name": "테스터",
+    })
+    r = client.post("/api/auth/login", json={
+        "email": email, "password": "가" * 30 + "1",
+    })
+    assert r.status_code == 401
+
+
+def test_missing_auth_header_returns_401(client):
+    """Authorization 헤더 없이 보호된 엔드포인트 접근 → 401 (403 아님)."""
+    r = client.get("/api/auth/me")
+    assert r.status_code == 401
 
 
 def test_malformed_sub_access_token_returns_401(client):

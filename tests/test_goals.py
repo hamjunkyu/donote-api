@@ -170,3 +170,14 @@ def test_reactivate_missing_goal_returns_404(auth_client, test_user):
     missing = uuid.uuid4()
     r = auth_client.patch(f"/api/goals/{missing}/reactivate")
     assert r.status_code == 404
+
+
+def test_contribute_to_cancelled_goal_rejected(auth_client, test_user):
+    """취소된 목표에 적립 시도 → 409 (먼저 재개해야 함)."""
+    goal_id = auth_client.post("/api/goals/", json={
+        "name": "취소목표", "target_amount": 100000,
+    }).json()["id"]
+    assert auth_client.patch(f"/api/goals/{goal_id}/cancel").json()["status"] == "CANCELLED"
+
+    r = auth_client.post(f"/api/goals/{goal_id}/contributions", json={"amount": 1000})
+    assert r.status_code == 409

@@ -60,11 +60,15 @@ def create_category(db: Session, user_id: UUID, data: CategoryCreate) -> Categor
     new_category = Category(
         user_id=user_id,
         name=data.name,
-        type=data.type.value 
+        type=data.type.value
     )
     db.add(new_category)
-    db.commit()          
-    db.refresh(new_category) 
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("이미 같은 이름의 카테고리가 있습니다.")
+    db.refresh(new_category)
     return new_category
 
 def update_category(db: Session, user_id: UUID, category_id: UUID, data: CategoryUpdate) -> Optional[Category]:
@@ -78,7 +82,11 @@ def update_category(db: Session, user_id: UUID, category_id: UUID, data: Categor
         return None 
         
     category.name = data.name
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("이미 같은 이름의 카테고리가 있습니다.")
     db.refresh(category)
     return category
 

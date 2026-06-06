@@ -14,6 +14,7 @@ from app.goals.models import Goal, GoalContribution
 from app.goals.schemas import GoalCreate, GoalUpdate, ContributionCreate
 from app.notifications.service import create_notification
 from app.notifications.constants import NotificationType
+from app.shared.exceptions import ConflictError
 
 
 def _contribution_sum_subquery():
@@ -288,6 +289,8 @@ def create_contribution(
     )
     if not goal:
         return None
+    if goal.status == "CANCELLED":
+        raise ConflictError("취소된 목표에는 적립할 수 없습니다. 먼저 목표를 재개하세요.")
 
     contributed_at = data.contributed_at or datetime.utcnow().date()
     contribution = GoalContribution(
