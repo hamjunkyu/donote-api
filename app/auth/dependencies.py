@@ -59,7 +59,15 @@ def get_current_user(
             detail="유효하지 않은 토큰입니다",
         )
 
-    user = get_user_by_id(db, uuid.UUID(user_id))
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 토큰입니다",
+        )
+
+    user = get_user_by_id(db, user_uuid)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
