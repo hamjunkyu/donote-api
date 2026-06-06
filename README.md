@@ -22,7 +22,7 @@
 | 통계 | 기간별 합계, 카테고리별 비율, 월간 리포트 (실부담액 기준) |
 | 예산 관리 | 월별/카테고리별 예산 설정, 소진율 추적 (SAFE/WARNING/EXCEEDED) |
 | 더치페이 정산 | 균등/직접 분배, 회원·비회원 참여자 지원, 미수금 추적 |
-| 저축 목표 | 카테고리 연결 목표, 진행률 자동 추적, 마일스톤 알림 (25/50/75/100%) |
+| 저축 목표 | 명시적 적립 기록 기반 진행률 추적, 마일스톤 알림 (25/50/75/100%) |
 | 알림 시스템 | 예산 임계값, 정산 요청, 목표 달성 자동 알림 |
 | CSV Bulk Import | CSV 업로드, 해싱 기반 중복 방어, 카테고리 자동 매칭 |
 
@@ -37,7 +37,7 @@
 
 | 이름 | GitHub |
 |---|---|
-| 김동준 | [dg-jun0918](https://github.com/dg-jun0918) |
+| 김동준 | [dj-jun0918](https://github.com/dg-jun0918) |
 | 김민수 | [15proms1008](https://github.com/15proms1008) |
 | 함준규 | [hamjunkyu](https://github.com/hamjunkyu) |
 | 베키 | [Rhebekah](https://github.com/Rhebekah) |

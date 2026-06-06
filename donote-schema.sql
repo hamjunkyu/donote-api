@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ScX3OJ6Z6nyWKbgWCcnhf8qaubvvzbSfMSPtqfjFfLbnxaRiiiS8FKqD5xWJQPB
+\restrict ABlhOPRlgb214tgZTUY0sBbcEhSaFOdcXP56C937Od2D0swACFKRGRS3wvTZykp
 
 -- Dumped from database version 17.9
 -- Dumped by pg_dump version 17.9
@@ -143,6 +143,23 @@ CREATE TABLE public.categories (
 ALTER TABLE public.categories OWNER TO postgres;
 
 --
+-- Name: goal_contributions; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.goal_contributions (
+    id uuid NOT NULL,
+    goal_id uuid NOT NULL,
+    amount numeric(12,0) NOT NULL,
+    memo character varying(200),
+    contributed_at date NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    CONSTRAINT ck_goal_contribution_amount_gt_zero CHECK ((amount > (0)::numeric))
+);
+
+
+ALTER TABLE public.goal_contributions OWNER TO postgres;
+
+--
 -- Name: goals; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -152,7 +169,6 @@ CREATE TABLE public.goals (
     name character varying(100) NOT NULL,
     target_amount numeric(12,0) NOT NULL,
     target_date date,
-    category_id uuid NOT NULL,
     description character varying(500),
     status public.goal_status NOT NULL,
     created_at timestamp without time zone NOT NULL,
@@ -308,6 +324,14 @@ ALTER TABLE ONLY public.categories
 
 
 --
+-- Name: goal_contributions goal_contributions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.goal_contributions
+    ADD CONSTRAINT goal_contributions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: goals goals_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -420,10 +444,10 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: ix_goals_user_category; Type: INDEX; Schema: public; Owner: postgres
+-- Name: ix_goal_contributions_goal_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX ix_goals_user_category ON public.goals USING btree (user_id, category_id);
+CREATE INDEX ix_goal_contributions_goal_id ON public.goal_contributions USING btree (goal_id);
 
 
 --
@@ -507,11 +531,11 @@ ALTER TABLE ONLY public.categories
 
 
 --
--- Name: goals goals_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: goal_contributions goal_contributions_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.goals
-    ADD CONSTRAINT goals_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id);
+ALTER TABLE ONLY public.goal_contributions
+    ADD CONSTRAINT goal_contributions_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE CASCADE;
 
 
 --
@@ -598,5 +622,5 @@ ALTER TABLE ONLY public.transactions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ScX3OJ6Z6nyWKbgWCcnhf8qaubvvzbSfMSPtqfjFfLbnxaRiiiS8FKqD5xWJQPB
+\unrestrict ABlhOPRlgb214tgZTUY0sBbcEhSaFOdcXP56C937Od2D0swACFKRGRS3wvTZykp
 
