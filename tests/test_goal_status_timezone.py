@@ -17,12 +17,12 @@ def _goal(created_at, target_date):
     )
 
 
-def test_fresh_goal_is_on_track_regardless_of_local_tz():
-    # 방금 생성(UTC) + 미래 목표일 + 진행 0 → 경과율 0 → ON_TRACK.
+def test_fresh_goal_in_progress_regardless_of_local_tz():
+    # 방금 생성(UTC) + 미래 목표일 + 진행 0 → 만료 아님 → IN_PROGRESS.
     # 날짜 비교가 UTC 로 통일돼 서버 로컬 TZ 와 무관하게 결정적이어야 한다.
     now = datetime.utcnow()
     goal = _goal(created_at=now, target_date=(now + timedelta(days=30)).date())
-    assert determine_status(goal, 0.0) == "ON_TRACK"
+    assert determine_status(goal, 0.0) == "IN_PROGRESS"
 
 
 def test_goal_expired_uses_utc_today():

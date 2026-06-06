@@ -5,7 +5,6 @@ import pytest
 
 from app.auth.models import User
 from app.categories.models import Category
-from app.goals.models import Goal
 from app.transactions.models import Transaction
 from app.settlements.models import Settlement, SettlementParticipant
 
@@ -110,44 +109,6 @@ def test_update_with_others_category_forbidden(auth_client, db, test_user, expen
         "category_id": str(other_category.id),
     })
     assert res.status_code == 403
-
-
-# ---------- 삭제 시 goal 재평가 (B1 hook) ----------
-
-def test_delete_transaction_resets_goal(auth_client, db, test_user, expense_category):
-    goal = Goal(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        name="식비목표",
-        target_amount=100000,
-        category_id=expense_category.id,
-        status="IN_PROGRESS",
-        created_at=datetime.utcnow() - timedelta(seconds=1),
-    )
-    db.add(goal)
-    db.commit()
-
-    # 100000 지출 → 목표 100% → ACHIEVED
-    res = auth_client.post("/api/transactions/", json={
-        "type": "EXPENSE",
-        "amount": 100000,
-        "category_id": str(expense_category.id),
-        "transaction_date": str(date.today()),
-    })
-    assert res.status_code == 201
-    txn_id = res.json()["id"]
-
-    db.refresh(goal)
-    assert goal.status == "ACHIEVED"
-    assert goal.is_achieved_notified is True
-
-    # 거래 삭제 → goal hook 재평가 → 0% → 복구
-    res = auth_client.delete(f"/api/transactions/{txn_id}")
-    assert res.status_code == 200
-
-    db.refresh(goal)
-    assert goal.status == "IN_PROGRESS"
-    assert goal.is_achieved_notified is False
 
 
 # ---------- 정산 cascade (PR9 머지 후 활성화) ----------

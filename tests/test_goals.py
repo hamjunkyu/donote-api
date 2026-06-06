@@ -1,192 +1,115 @@
-import pytest
 import uuid
-from datetime import date, datetime, timedelta
-from app.categories.models import Category
+from datetime import date, timedelta
+
 from app.goals.models import Goal
-from app.transactions.models import Transaction
 from app.notifications.models import Notification
 
 
-@pytest.fixture
-def test_category(db, test_user):
-    """테스트용 지출 카테고리 생성 피스처."""
-    category = Category(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        name="저축-여행자금",
-        type="EXPENSE"
-    )
-    db.add(category)
-    db.commit()
-    db.refresh(category)
-    return category
-
-
-def test_create_and_read_goal(auth_client, test_user, test_category):
-    # 1. 목표 생성
+def test_create_and_read_goal(auth_client, test_user):
+    """카테고리 없이 목표를 생성하고, 초기 진행률 0 / status IN_PROGRESS 확인."""
     goal_data = {
         "name": "제주도 여행자금",
         "target_amount": 1000000,
         "target_date": str(date.today() + timedelta(days=30)),
-        "category_id": str(test_category.id),
-        "description": "올해 여름 제주도 여행 저축 목표"
+        "description": "올해 여름 제주도 여행 저축 목표",
     }
     response = auth_client.post("/api/goals/", json=goal_data)
     assert response.status_code == 201
-    res_data = response.json()
-    assert res_data["name"] == "제주도 여행자금"
-    assert res_data["current_amount"] == 0
-    assert res_data["progress_percentage"] == 0
-    assert res_data["remaining_amount"] == 1000000
-    assert res_data["status"] == "ON_TRACK"
+    res = response.json()
+    assert res["name"] == "제주도 여행자금"
+    assert res["current_amount"] == 0
+    assert res["progress_percentage"] == 0
+    assert res["remaining_amount"] == 1000000
+    assert res["status"] == "IN_PROGRESS"
+    assert "category_id" not in res
 
-    # 2. 목록 조회 및 계산 필드 검증
-    list_response = auth_client.get("/api/goals/")
-    assert list_response.status_code == 200
-    res_data = list_response.json()
-    assert res_data["total"] >= 1
-    assert len(res_data["items"]) >= 1
-    goal_item = res_data["items"][0]
-    assert goal_item["current_amount"] == 0
-    assert goal_item["progress_percentage"] == 0
-    assert goal_item["status"] == "ON_TRACK"
+    list_res = auth_client.get("/api/goals/").json()
+    assert list_res["total"] >= 1
+    item = list_res["items"][0]
+    assert item["current_amount"] == 0
+    assert item["status"] == "IN_PROGRESS"
 
 
-def test_goal_milestones_and_refiring(auth_client, test_user, test_category, db):
-    # 1. 100만원 목표 생성
-    goal_data = {
-        "name": "맥북 구매 자금",
-        "target_amount": 1000000,
-        "target_date": str(date.today() + timedelta(days=10)),
-        "category_id": str(test_category.id),
-        "description": "맥북 프로 저축 목표"
-    }
-    response = auth_client.post("/api/goals/", json=goal_data)
-    goal_id = response.json()["id"]
+def test_contribution_progress_and_in_progress_filter(auth_client, test_user):
+    """적립하면 진행률이 오르고, IN_PROGRESS 필터가 정상 동작한다 (이전엔 422)."""
+    goal_id = auth_client.post("/api/goals/", json={
+        "name": "비상금", "target_amount": 100000,
+    }).json()["id"]
 
-    # 2. 25만원 지출(저축) 기록 추가 -> 25% 마일스톤 도달
-    tx25 = Transaction(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        type="EXPENSE",
-        amount=250000,
-        category_id=test_category.id,
-        description="맥북 저금 1차",
-        transaction_date=date.today(),
-        created_at=datetime.utcnow()
+    r = auth_client.post(
+        f"/api/goals/{goal_id}/contributions", json={"amount": 40000, "memo": "1차"}
     )
-    db.add(tx25)
-    db.commit()
+    assert r.status_code == 201
 
-    # 알림 발생 로직 트리거
-    from app.goals.service import check_and_notify_goal_achievement
-    check_and_notify_goal_achievement(db, test_user.id, test_category.id)
+    goal = auth_client.get(f"/api/goals/{goal_id}").json()
+    assert goal["current_amount"] == 40000
+    assert goal["progress_percentage"] == 40
+    assert goal["remaining_amount"] == 60000
 
-    # 마일스톤 및 알림 확인
-    goal = db.query(Goal).filter(Goal.id == goal_id).first()
+    contribs = auth_client.get(f"/api/goals/{goal_id}/contributions").json()
+    assert contribs["total"] == 1
+    assert contribs["items"][0]["memo"] == "1차"
+
+    flt = auth_client.get("/api/goals/?status=IN_PROGRESS")
+    assert flt.status_code == 200
+    assert flt.json()["total"] >= 1
+
+
+def test_milestones_achievement_and_revert(auth_client, test_user, db):
+    """적립 누적으로 마일스톤·달성 알림이 발생하고, 적립 삭제 시 복구된다."""
+    goal_id = auth_client.post("/api/goals/", json={
+        "name": "맥북", "target_amount": 1000000,
+    }).json()["id"]
+    gid = uuid.UUID(goal_id)
+
+    # 25% 적립 → 마일스톤 알림
+    auth_client.post(f"/api/goals/{goal_id}/contributions", json={"amount": 250000})
+    db.expire_all()
+    goal = db.query(Goal).filter(Goal.id == gid).first()
     assert goal.is_25_notified is True
     assert goal.is_50_notified is False
 
-    # 알림함 검증
-    notifications = db.query(Notification).filter(Notification.user_id == test_user.id, Notification.type == "GOAL_MILESTONE").all()
-    assert len(notifications) == 1
-    assert "25%" in notifications[0].message
+    milestones = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "GOAL_MILESTONE",
+    ).all()
+    assert len(milestones) == 1
+    assert "25%" in milestones[0].message
 
-    # 3. 50만원 지출 추가 -> 75% 마일스톤 도달 (25 + 50 = 75)
-    tx50 = Transaction(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        type="EXPENSE",
-        amount=500000,
-        category_id=test_category.id,
-        description="맥북 저금 2차",
-        transaction_date=date.today(),
-        created_at=datetime.utcnow()
-    )
-    db.add(tx50)
-    db.commit()
-    check_and_notify_goal_achievement(db, test_user.id, test_category.id)
-
-    goal = db.query(Goal).filter(Goal.id == goal_id).first()
-    assert goal.is_25_notified is True
+    # 누적 75%
+    auth_client.post(f"/api/goals/{goal_id}/contributions", json={"amount": 500000})
+    db.expire_all()
+    goal = db.query(Goal).filter(Goal.id == gid).first()
     assert goal.is_50_notified is True
     assert goal.is_75_notified is True
     assert goal.is_achieved_notified is False
 
-    # 4. 25만원 추가 지출 -> 100% 달성
-    tx100 = Transaction(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        type="EXPENSE",
-        amount=250000,
-        category_id=test_category.id,
-        description="맥북 저금 완납",
-        transaction_date=date.today(),
-        created_at=datetime.utcnow()
-    )
-    db.add(tx100)
-    db.commit()
-    check_and_notify_goal_achievement(db, test_user.id, test_category.id)
-
-    goal = db.query(Goal).filter(Goal.id == goal_id).first()
-    assert goal.is_achieved_notified is True
+    # 100% 달성
+    last = auth_client.post(
+        f"/api/goals/{goal_id}/contributions", json={"amount": 250000}
+    ).json()
+    db.expire_all()
+    goal = db.query(Goal).filter(Goal.id == gid).first()
     assert goal.status == "ACHIEVED"
+    assert goal.is_achieved_notified is True
     assert goal.achieved_at is not None
+    achieved = db.query(Notification).filter(
+        Notification.user_id == test_user.id,
+        Notification.type == "GOAL_ACHIEVED",
+    ).first()
+    assert achieved is not None
 
-    # 달성 알림 생성 확인
-    achieved_notif = db.query(Notification).filter(Notification.user_id == test_user.id, Notification.type == "GOAL_ACHIEVED").first()
-    assert achieved_notif is not None
-
-    # 5. 거래 삭제로 하락 유도 -> 플래그 리셋 및 재발화 테스트
-    db.delete(tx100)
-    db.commit()
-    check_and_notify_goal_achievement(db, test_user.id, test_category.id)
-
-    # 100% 미달로 돌아갔으므로 achieved flag reset 및 status=IN_PROGRESS 검증
-    goal = db.query(Goal).filter(Goal.id == goal_id).first()
-    assert goal.is_achieved_notified is False
+    # 적립 삭제로 100% 미만 → 상태·플래그 복구
+    del_res = auth_client.delete(f"/api/goals/{goal_id}/contributions/{last['id']}")
+    assert del_res.status_code == 204
+    db.expire_all()
+    goal = db.query(Goal).filter(Goal.id == gid).first()
     assert goal.status == "IN_PROGRESS"
+    assert goal.is_achieved_notified is False
     assert goal.achieved_at is None
 
-    # 6. 다시 25만원 추가 지출 -> 100% 재달성 및 재알림 확인
-    tx100_new = Transaction(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        type="EXPENSE",
-        amount=250000,
-        category_id=test_category.id,
-        description="맥북 저금 재완납",
-        transaction_date=date.today(),
-        created_at=datetime.utcnow()
-    )
-    db.add(tx100_new)
-    db.commit()
-    check_and_notify_goal_achievement(db, test_user.id, test_category.id)
 
-    goal = db.query(Goal).filter(Goal.id == goal_id).first()
-    assert goal.is_achieved_notified is True
-    assert goal.status == "ACHIEVED"
-
-
-def test_goal_border_day_status(auth_client, test_user, test_category, db):
-    # 오늘이 마감일인데 목표 달성액이 부족한 경우 -> BEHIND로 올바르게 상태 판정되는지 검증
-    # target_date 와 created_at 을 같은 UTC 기준으로 맞춰 total_days = 0 을 결정적으로 만든다
-    # (date.today() 는 로컬이라 created_at(UTC)과 어긋나면 total_days 가 0 이 아닐 수 있음)
-    now = datetime.utcnow()
-    goal = Goal(
-        id=uuid.uuid4(),
-        user_id=test_user.id,
-        name="오늘까지 마감 목표",
-        target_amount=100000,
-        target_date=now.date(),
-        category_id=test_category.id,
-        status="IN_PROGRESS",
-        created_at=now  # 오늘 만듦 (total_days = 0)
-    )
-    db.add(goal)
-    db.commit()
-
-    # 진행률 조회
-    response = auth_client.get(f"/api/goals/{goal.id}/progress")
-    assert response.status_code == 200
-    assert response.json()["status"] == "BEHIND"
+def test_contribution_on_missing_goal_returns_404(auth_client, test_user):
+    missing = uuid.uuid4()
+    r = auth_client.post(f"/api/goals/{missing}/contributions", json={"amount": 1000})
+    assert r.status_code == 404
