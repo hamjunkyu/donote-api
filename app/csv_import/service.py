@@ -29,6 +29,7 @@ def parse_csv_content(decoded_content: str, result: ImportResult) -> Iterator[CS
     reader = csv.DictReader(io.StringIO(decoded_content))
 
     for index, row in enumerate(reader, start=2):
+        result.total_rows += 1  # 형식 오류로 건너뛰는 행도 전체 처리 행수에 포함
         amount_str = row.get("금액", "").replace(",", "").strip()
         try:
             amount = float(amount_str) if amount_str else 0.0
@@ -65,8 +66,6 @@ def process_import_batch(
     category_map: dict
 ) -> None:
     """단일 배치 데이터에 대한 중복 검사, 해시 저장 및 거래(Transaction) 일괄 등록을 수행합니다."""
-    result.total_rows += len(batch)
-    
     row_hashes = {}
     for row in batch:
         h = generate_row_hash(user_id, row)

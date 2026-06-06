@@ -58,6 +58,29 @@ def test_create_invalid_type_rejected(auth_client, expense_category):
     assert res.status_code == 422
 
 
+def test_create_transaction_type_category_mismatch_rejected(auth_client, expense_category):
+    """EXPENSE 카테고리에 INCOME 거래 생성 → 400 (타입 불일치)."""
+    res = auth_client.post("/api/transactions/", json={
+        "type": "INCOME",
+        "amount": 1000,
+        "category_id": str(expense_category.id),
+        "transaction_date": str(date.today()),
+    })
+    assert res.status_code == 400
+
+
+def test_update_transaction_type_to_mismatch_rejected(auth_client, expense_category):
+    """EXPENSE 거래의 type 을 INCOME 으로 변경(카테고리는 EXPENSE 유지) → 400."""
+    txn_id = auth_client.post("/api/transactions/", json={
+        "type": "EXPENSE",
+        "amount": 1000,
+        "category_id": str(expense_category.id),
+        "transaction_date": str(date.today()),
+    }).json()["id"]
+    res = auth_client.patch(f"/api/transactions/{txn_id}", json={"type": "INCOME"})
+    assert res.status_code == 400
+
+
 def test_create_with_others_category_forbidden(auth_client, db):
     other = User(
         id=uuid.uuid4(),

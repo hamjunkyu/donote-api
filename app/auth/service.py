@@ -36,11 +36,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         hashed_password: 비교 대상 bcrypt 해시.
 
     Returns:
-        일치하면 True, 불일치하면 False.
+        일치하면 True, 불일치하거나 입력이 bcrypt 한계(72바이트)를 넘으면 False.
     """
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-    )
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+        )
+    except ValueError:
+        return False
 
 
 def create_access_token(user_id: uuid.UUID) -> str:

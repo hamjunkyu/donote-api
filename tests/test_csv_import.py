@@ -47,6 +47,23 @@ def test_csv_import_skips_invalid_date(db, test_user):
     assert any("날짜 형식 오류" in e for e in result.errors)
 
 
+def test_csv_import_total_rows_counts_all_data_rows(db, test_user):
+    """total_rows 는 형식 오류로 건너뛴 행을 포함한 전체 데이터 행 수다."""
+    _seed_categories(db, test_user.id)
+    csv_content = (
+        "날짜,유형,카테고리,금액,메모\n"
+        "2026-01-01,지출,식비,9000,정상\n"
+        "2026/01/02,지출,식비,8000,날짜오류\n"
+        "2026-01-03,지출,식비,abc,금액오류\n"
+    )
+
+    result = process_csv_import(db, test_user.id, csv_content)
+
+    assert result.total_rows == 3      # 3개 데이터 행 전부 집계 (형식 오류 포함)
+    assert result.imported_count == 1  # 정상 1건만 저장
+    assert len(result.errors) == 2     # 날짜·금액 형식 오류 2건
+
+
 def test_csv_import_category_fallback_to_etc(db, test_user):
     """매칭되지 않는 카테고리는 동일 type 의 '기타'로 폴백되어 import 된다."""
     _seed_categories(db, test_user.id)
