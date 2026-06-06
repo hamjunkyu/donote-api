@@ -23,6 +23,8 @@ class SignupRequest(BaseModel):
         """비밀번호 최소 요구사항 검증."""
         if len(v) < 8:
             raise ValueError("비밀번호는 최소 8자 이상이어야 합니다")
+        if len(v) > 128:
+            raise ValueError("비밀번호는 최대 128자까지 가능합니다")
         has_letter = any(c.isalpha() for c in v)
         has_digit = any(c.isdigit() for c in v)
         if not (has_letter and has_digit):
@@ -74,6 +76,8 @@ class PasswordChangeRequest(BaseModel):
         """새 비밀번호 최소 요구사항 검증."""
         if len(v) < 8:
             raise ValueError("비밀번호는 최소 8자 이상이어야 합니다")
+        if len(v) > 128:
+            raise ValueError("비밀번호는 최대 128자까지 가능합니다")
         has_letter = any(c.isalpha() for c in v)
         has_digit = any(c.isdigit() for c in v)
         if not (has_letter and has_digit):

@@ -120,12 +120,23 @@ def refresh(request: RefreshRequest, db: Session = Depends(get_db)):
         )
 
     user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 Refresh Token입니다",
+        )
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 Refresh Token입니다",
+        )
+
     service.delete_refresh_token(db, request.refresh_token)
 
-    new_access_token = service.create_access_token(uuid.UUID(user_id))
-    new_refresh_token = service.create_refresh_token(
-        uuid.UUID(user_id), db
-    )
+    new_access_token = service.create_access_token(user_uuid)
+    new_refresh_token = service.create_refresh_token(user_uuid, db)
 
     return TokenResponse(
         access_token=new_access_token,
